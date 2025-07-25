@@ -1,6 +1,6 @@
 import mongoose from "mongoose"
 
-// User Schema with better validation
+// Enhanced User Schema with OAuth support
 const userSchema = new mongoose.Schema(
   {
     name: {
@@ -17,10 +17,13 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, "Please enter a valid email"],
+      index: true,
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: function () {
+        return this.authProvider === "credentials"
+      },
       minlength: [6, "Password must be at least 6 characters"],
     },
     role: {
@@ -30,6 +33,7 @@ const userSchema = new mongoose.Schema(
         message: "Role must be either landlord or tenant",
       },
       required: [true, "Role is required"],
+      default: "tenant",
     },
     country: {
       type: String,
@@ -45,14 +49,31 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    authProvider: {
+      type: String,
+      enum: ["credentials", "google", "facebook"],
+      default: "credentials",
+    },
+    authProviderId: {
+      type: String,
+      sparse: true,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
   },
 )
 
-// Add index for better performance
-userSchema.index({ email: 1 })
+// Add compound index for OAuth users
+userSchema.index({ authProvider: 1, authProviderId: 1 })
 
 // Listing Schema
 const listingSchema = new mongoose.Schema(

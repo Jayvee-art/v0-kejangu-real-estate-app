@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@auth/core": "latest",
     "@radix-ui/react-checkbox": "latest",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-label": "^2.0.2",
@@ -23,6 +24,8 @@
     "lucide-react": "^0.454.0",
     "mongoose": "latest",
     "next": "14.2.16",
+    "next-auth": "latest",
+    "nodemailer": "latest",
     "react": "^18",
     "react-dom": "^18",
     "tailwind-merge": "^2.5.5",
