@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Building2, Eye, EyeOff, Globe, Users, Heart } from "lucide-react"
+import { Building2, Eye, EyeOff, Globe, Users } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 const countries = [
@@ -88,23 +88,32 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
+      console.log("Submitting registration form...")
+
+      const requestData = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        country: formData.country,
+        phone: formData.phone,
+        subscribeToUpdates: formData.subscribeToUpdates,
+      }
+
+      console.log("Request data:", { ...requestData, password: "[HIDDEN]" })
+
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role,
-          country: formData.country,
-          phone: formData.phone,
-          subscribeToUpdates: formData.subscribeToUpdates,
-        }),
+        body: JSON.stringify(requestData),
       })
 
+      console.log("Response status:", response.status)
+
       const data = await response.json()
+      console.log("Response data:", data)
 
       if (response.ok) {
         toast({
@@ -112,21 +121,22 @@ export default function RegisterPage() {
           description: "Your account has been created successfully. Please sign in to continue.",
         })
 
-        // Show social media style success animation
         setTimeout(() => {
           router.push("/auth/login")
         }, 1500)
       } else {
+        console.error("Registration failed:", data)
         toast({
           title: "Registration failed",
-          description: data.message || "Something went wrong",
+          description: data.message || "Something went wrong. Please try again.",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("Registration error:", error)
       toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
+        title: "Network Error",
+        description: "Unable to connect to server. Please check your internet connection and try again.",
         variant: "destructive",
       })
     } finally {
@@ -135,40 +145,38 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
-      {/* Social Media Style Background Elements */}
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      {/* Modern 3D Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-20 h-20 bg-blue-200 rounded-full opacity-20 animate-pulse"></div>
-        <div className="absolute top-40 right-20 w-16 h-16 bg-purple-200 rounded-full opacity-30 animate-bounce"></div>
-        <div className="absolute bottom-32 left-20 w-12 h-12 bg-pink-200 rounded-full opacity-25 animate-pulse"></div>
-        <div className="absolute bottom-20 right-32 w-24 h-24 bg-indigo-200 rounded-full opacity-20 animate-bounce"></div>
+        <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-purple-400/20 rounded-3xl transform rotate-12 animate-pulse"></div>
+        <div className="absolute top-40 right-20 w-24 h-24 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-2xl transform -rotate-12 animate-bounce"></div>
+        <div className="absolute bottom-32 left-20 w-20 h-20 bg-gradient-to-br from-indigo-400/20 to-blue-400/20 rounded-xl transform rotate-45 animate-pulse"></div>
+        <div className="absolute bottom-20 right-32 w-28 h-28 bg-gradient-to-br from-pink-400/20 to-purple-400/20 rounded-full animate-bounce"></div>
       </div>
 
-      <Card className="w-full max-w-lg relative z-10 shadow-2xl border-0">
+      <Card className="w-full max-w-lg relative z-10 shadow-2xl border-0 bg-white/90 backdrop-blur-md">
         <CardHeader className="text-center pb-6">
-          <div className="flex items-center justify-center mb-4">
-            <div className="relative">
-              <Building2 className="h-10 w-10 text-blue-600 animate-pulse" />
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
-                <Heart className="h-2 w-2 text-white fill-current animate-pulse" />
-              </div>
+          <div className="flex items-center justify-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+              <Building2 className="h-8 w-8 text-white" />
             </div>
-            <span className="ml-3 text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Kejangu
-            </span>
           </div>
-          <CardTitle className="text-2xl">Join Our Community</CardTitle>
-          <CardDescription className="flex items-center justify-center gap-2">
-            <Users className="h-4 w-4" />
-            Connect with thousands of property seekers worldwide
+          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            Join Kejangu
+          </CardTitle>
+          <CardDescription className="flex items-center justify-center gap-2 text-lg">
+            <Users className="h-5 w-5" />
+            Create your account to get started
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             {/* Name and Email Row */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name" className="text-sm font-medium">
+                  Full Name
+                </Label>
                 <Input
                   id="name"
                   type="text"
@@ -176,11 +184,13 @@ export default function RegisterPage() {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  className="transition-all focus:scale-105"
+                  className="h-12 rounded-xl border-2 focus:border-blue-500 transition-all"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -188,15 +198,15 @@ export default function RegisterPage() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
-                  className="transition-all focus:scale-105"
+                  className="h-12 rounded-xl border-2 focus:border-blue-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Country and Phone Row */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="country">
+                <Label htmlFor="country" className="text-sm font-medium">
                   <Globe className="h-4 w-4 inline mr-1" />
                   Country
                 </Label>
@@ -204,7 +214,7 @@ export default function RegisterPage() {
                   value={formData.country}
                   onValueChange={(value) => setFormData({ ...formData, country: value })}
                 >
-                  <SelectTrigger className="transition-all focus:scale-105">
+                  <SelectTrigger className="h-12 rounded-xl border-2 focus:border-blue-500">
                     <SelectValue placeholder="Select country" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
@@ -220,23 +230,27 @@ export default function RegisterPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone (Optional)</Label>
+                <Label htmlFor="phone" className="text-sm font-medium">
+                  Phone (Optional)
+                </Label>
                 <Input
                   id="phone"
                   type="tel"
                   placeholder="+254 700 000 000"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="transition-all focus:scale-105"
+                  className="h-12 rounded-xl border-2 focus:border-blue-500 transition-all"
                 />
               </div>
             </div>
 
             {/* Role Selection */}
             <div className="space-y-2">
-              <Label htmlFor="role">I am a</Label>
+              <Label htmlFor="role" className="text-sm font-medium">
+                I am a
+              </Label>
               <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-                <SelectTrigger className="transition-all focus:scale-105">
+                <SelectTrigger className="h-12 rounded-xl border-2 focus:border-blue-500">
                   <SelectValue placeholder="Select your role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -257,9 +271,11 @@ export default function RegisterPage() {
             </div>
 
             {/* Password Fields */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -268,7 +284,7 @@ export default function RegisterPage() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     required
-                    className="transition-all focus:scale-105"
+                    className="h-12 rounded-xl border-2 focus:border-blue-500 transition-all pr-12"
                   />
                   <Button
                     type="button"
@@ -282,7 +298,9 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">
+                  Confirm Password
+                </Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
@@ -291,7 +309,7 @@ export default function RegisterPage() {
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     required
-                    className="transition-all focus:scale-105"
+                    className="h-12 rounded-xl border-2 focus:border-blue-500 transition-all pr-12"
                   />
                   <Button
                     type="button"
@@ -307,25 +325,25 @@ export default function RegisterPage() {
             </div>
 
             {/* Checkboxes */}
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-3">
                 <Checkbox
                   id="terms"
                   checked={formData.agreeToTerms}
                   onCheckedChange={(checked) => setFormData({ ...formData, agreeToTerms: checked as boolean })}
                 />
-                <Label htmlFor="terms" className="text-sm">
+                <Label htmlFor="terms" className="text-sm leading-relaxed">
                   I agree to the{" "}
-                  <Link href="/terms" className="text-blue-600 hover:underline">
+                  <Link href="/terms" className="text-blue-600 hover:underline font-medium">
                     Terms of Service
                   </Link>{" "}
                   and{" "}
-                  <Link href="/privacy" className="text-blue-600 hover:underline">
+                  <Link href="/privacy" className="text-blue-600 hover:underline font-medium">
                     Privacy Policy
                   </Link>
                 </Label>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <Checkbox
                   id="updates"
                   checked={formData.subscribeToUpdates}
@@ -339,61 +357,21 @@ export default function RegisterPage() {
 
             <Button
               type="submit"
-              className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105"
+              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all transform hover:scale-105 rounded-xl shadow-lg"
               disabled={isLoading}
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                   Creating your account...
                 </div>
               ) : (
-                "Join Kejangu Community"
+                "Create Account"
               )}
             </Button>
           </form>
 
-          {/* Social Login Placeholder */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-muted-foreground">Or continue with</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="transition-all hover:scale-105 bg-transparent" disabled>
-              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              Google
-            </Button>
-            <Button variant="outline" className="transition-all hover:scale-105 bg-transparent" disabled>
-              <svg className="h-4 w-4 mr-2" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              Facebook
-            </Button>
-          </div>
-
-          <div className="text-center">
+          <div className="text-center pt-4">
             <p className="text-sm text-gray-600">
               Already have an account?{" "}
               <Link href="/auth/login" className="text-blue-600 hover:underline font-semibold">
