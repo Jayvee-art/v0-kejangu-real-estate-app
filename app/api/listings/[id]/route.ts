@@ -3,11 +3,16 @@ import jwt from "jsonwebtoken"
 import { connectDB } from "@/lib/mongodb"
 import { Listing } from "@/lib/models"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
-
 // PUT update listing
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET
+
+    if (!JWT_SECRET) {
+      console.error("JWT_SECRET environment variable is not set")
+      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    }
+
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
@@ -46,6 +51,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 // DELETE listing
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET
+
+    if (!JWT_SECRET) {
+      console.error("JWT_SECRET environment variable is not set")
+      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    }
+
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })

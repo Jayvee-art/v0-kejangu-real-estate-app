@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "All fields are required" }, { status: 400 })
     }
 
+    if (password.length < 6) {
+      return NextResponse.json({ message: "Password must be at least 6 characters" }, { status: 400 })
+    }
+
     if (!["landlord", "tenant"].includes(role)) {
       return NextResponse.json({ message: "Invalid role" }, { status: 400 })
     }
@@ -19,9 +23,9 @@ export async function POST(request: NextRequest) {
     await connectDB()
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email })
+    const existingUser = await User.findOne({ email: email.toLowerCase() })
     if (existingUser) {
-      return NextResponse.json({ message: "User already exists" }, { status: 400 })
+      return NextResponse.json({ message: "User already exists with this email" }, { status: 400 })
     }
 
     // Hash password
@@ -29,8 +33,8 @@ export async function POST(request: NextRequest) {
 
     // Create user
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password: hashedPassword,
       role,
     })

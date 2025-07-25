@@ -4,10 +4,15 @@ import jwt from "jsonwebtoken"
 import { connectDB } from "@/lib/mongodb"
 import { User } from "@/lib/models"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
-
 export async function POST(request: NextRequest) {
   try {
+    const JWT_SECRET = process.env.JWT_SECRET
+
+    if (!JWT_SECRET) {
+      console.error("JWT_SECRET environment variable is not set")
+      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    }
+
     const { email, password } = await request.json()
 
     if (!email || !password) {
