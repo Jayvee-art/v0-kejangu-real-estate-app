@@ -25,6 +25,18 @@ const userSchema = new mongoose.Schema(
       enum: ["landlord", "tenant"],
       required: true,
     },
+    country: {
+      type: String,
+      trim: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    subscribeToUpdates: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

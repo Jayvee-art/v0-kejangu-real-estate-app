@@ -5,11 +5,11 @@ import { User } from "@/lib/models"
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password, role } = await request.json()
+    const { name, email, password, role, country, phone, subscribeToUpdates } = await request.json()
 
     // Validate input
     if (!name || !email || !password || !role) {
-      return NextResponse.json({ message: "All fields are required" }, { status: 400 })
+      return NextResponse.json({ message: "All required fields must be provided" }, { status: 400 })
     }
 
     if (password.length < 6) {
@@ -37,6 +37,9 @@ export async function POST(request: NextRequest) {
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       role,
+      country: country || null,
+      phone: phone || null,
+      subscribeToUpdates: subscribeToUpdates || false,
     })
 
     return NextResponse.json({ message: "User created successfully" }, { status: 201 })
