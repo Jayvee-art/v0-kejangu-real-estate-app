@@ -68,7 +68,7 @@ export default function RealEstateChat() {
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Home className="h-5 w-5" />
-              Kejangu Real Estate Assistant
+              Kejangu Assistant
             </CardTitle>
             {/* Removed: Logout button */}
             {/* {userId && (

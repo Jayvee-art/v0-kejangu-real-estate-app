@@ -15,7 +15,7 @@ export default async function ChatDemoPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center py-16">
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Kejangu Real Estate</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Kejangu</h1>
           <p className="text-xl text-gray-600 mb-8">Your AI-powered real estate assistant is ready to help</p>
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <div className="bg-white p-6 rounded-lg shadow-md">
