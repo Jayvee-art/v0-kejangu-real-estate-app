@@ -78,13 +78,13 @@ export function AnimatedHero() {
               <Badge className="mb-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 text-sm font-medium">
                 🏠 Premium Real Estate Platform
               </Badge>
-              <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
                 Find Your
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600">
                   Dream Home
                 </span>
               </h1>
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              <p className="text-lg text-gray-600 mb-8 leading-relaxed">
                 Discover exceptional properties with our advanced search platform. Connect directly with verified
                 landlords and find your perfect rental home.
               </p>
@@ -116,7 +116,7 @@ export function AnimatedHero() {
               <Link href="/listings">
                 <Button
                   size="lg"
-                  className="w-full sm:w-auto h-14 px-8 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 text-lg font-semibold"
+                  className="w-full sm:w-auto h-14 px-8 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 text-base font-semibold"
                 >
                   <Home className="h-5 w-5 mr-2" />
                   Explore Properties
@@ -127,7 +127,7 @@ export function AnimatedHero() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full sm:w-auto h-14 px-8 bg-white/80 backdrop-blur-md border-2 border-gray-200 hover:border-blue-300 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 text-lg font-semibold"
+                  className="w-full sm:w-auto h-14 px-8 bg-white/80 backdrop-blur-md border-2 border-gray-200 hover:border-blue-300 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-105 text-base font-semibold"
                 >
                   <Building className="h-5 w-5 mr-2" />
                   List Property
@@ -140,7 +140,7 @@ export function AnimatedHero() {
           <div className="relative">
             <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 shadow-2xl border border-white/20 transform perspective-1000 rotate-y-3">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">Featured Properties</h3>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">Featured Properties</h3>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
                   <span className="text-sm text-gray-600 font-medium">Live Updates</span>
@@ -155,7 +155,7 @@ export function AnimatedHero() {
                       <Building className="h-6 w-6 text-white" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-lg text-gray-800">{floatingProperties[currentIndex].title}</h4>
+                      <h4 className="font-bold text-base text-gray-800">{floatingProperties[currentIndex].title}</h4>
                       <p className="text-gray-600">{floatingProperties[currentIndex].location}</p>
                     </div>
                   </div>

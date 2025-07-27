@@ -90,8 +90,8 @@ export default function HomePage() {
             <Badge className="mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2">
               🗺️ Interactive Map
             </Badge>
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Find Properties Near You</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Find Properties Near You</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Explore available rentals in your preferred location with our interactive map and advanced search filters
             </p>
           </div>
@@ -107,8 +107,8 @@ export default function HomePage() {
             <Badge className="mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2">
               ✨ Why Choose Kejangu
             </Badge>
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Modern Property Management</h2>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Modern Property Management</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
               Experience the future of real estate with our cutting-edge platform
             </p>
           </div>
@@ -166,8 +166,8 @@ export default function HomePage() {
         </div>
 
         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8 relative z-10">
-          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready to Get Started?</h2>
-          <p className="text-xl text-blue-100 mb-10 leading-relaxed">
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Get Started?</h2>
+          <p className="text-lg text-blue-100 mb-10 leading-relaxed">
             Join thousands of landlords and tenants who trust Kejangu for their rental needs. Experience the future of
             real estate today.
           </p>
@@ -175,7 +175,7 @@ export default function HomePage() {
             <Link href="/auth/register">
               <Button
                 size="lg"
-                className="w-full sm:w-auto h-14 px-8 bg-white text-blue-600 hover:bg-gray-50 hover:scale-105 transition-all shadow-xl text-lg font-semibold rounded-xl"
+                className="w-full sm:w-auto h-14 px-8 bg-white text-blue-600 hover:bg-gray-50 hover:scale-105 transition-all shadow-xl text-base font-semibold rounded-xl"
               >
                 Start Your Journey
               </Button>
@@ -184,7 +184,7 @@ export default function HomePage() {
               <Button
                 size="lg"
                 variant="outline"
-                className="w-full sm:w-auto h-14 px-8 border-2 border-white text-white hover:bg-white hover:text-blue-600 hover:scale-105 transition-all shadow-xl text-lg font-semibold rounded-xl bg-transparent"
+                className="w-full sm:w-auto h-14 px-8 border-2 border-white text-white hover:bg-white hover:text-blue-600 hover:scale-105 transition-all shadow-xl text-base font-semibold rounded-xl bg-transparent"
               >
                 Explore Properties
               </Button>
