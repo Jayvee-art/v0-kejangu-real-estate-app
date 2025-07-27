@@ -6,35 +6,26 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageCircle, Send, Home, X, LogOut } from "lucide-react"
-import { signOut } from "@/app/auth/actions"
-import { useChat, type Message } from "@ai-sdk/react" // Import Message from @ai-sdk/react
-import { createSupabaseBrowserClient } from "@/lib/supabase/client"
+import { MessageCircle, Send, Home, X } from "lucide-react" // Removed: LogOut
+// Removed: import { signOut } from "@/app/auth/actions"
+import { useChat } from "@ai-sdk/react"
+// Removed: import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
-interface RealEstateChatProps {
-  userId: string | null
-  initialMessages?: Message[]
-}
-
-export default function RealEstateChat({ userId, initialMessages = [] }: RealEstateChatProps) {
+// Removed: interface RealEstateChatProps { userId: string | null; initialMessages?: Message[]; }
+export default function RealEstateChat() {
+  // Removed props
   const [isOpen, setIsOpen] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const supabase = createSupabaseBrowserClient()
+  // Removed: const supabase = createSupabaseBrowserClient()
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
     api: "/api/chat", // Specify the API route for the chat
-    initialMessages: initialMessages,
-    onFinish: (message) => {
-      // This callback fires when the AI response is complete
-      // The assistant message is already saved on the server via onFinish in route.ts
-    },
+    // Removed: initialMessages: initialMessages,
+    // Removed: onFinish callback
   })
 
-  useEffect(() => {
-    // This effect ensures that if initialMessages change (e.g., after login),
-    // the useChat hook's internal state is updated.
-    setMessages(initialMessages)
-  }, [initialMessages, setMessages])
+  // Removed: useEffect for initialMessages
+  // useEffect(() => { setMessages(initialMessages) }, [initialMessages, setMessages])
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -49,18 +40,18 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
 
   const handleUserSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!input.trim() || isLoading || !userId) return
+    if (!input.trim() || isLoading) return // Removed: || !userId
 
-    // Save user message to DB immediately
-    const userMessageContent = input
-    const { error } = await supabase.from("chat_messages").insert({
-      user_id: userId,
-      role: "user",
-      content: userMessageContent,
-    })
-    if (error) console.error("Error saving user message:", error)
+    // Removed: Save user message to DB immediately
+    // const userMessageContent = input
+    // const { error } = await supabase.from("chat_messages").insert({
+    //   user_id: userId,
+    //   role: "user",
+    //   content: userMessageContent,
+    // })
+    // if (error) console.error("Error saving user message:", error)
 
-    // Then, let useChat handle the submission to the API route
+    // Let useChat handle the submission to the API route
     handleSubmit(event)
   }
 
@@ -79,13 +70,14 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
               <Home className="h-5 w-5" />
               Kejangu Real Estate Assistant
             </CardTitle>
-            {userId && (
+            {/* Removed: Logout button */}
+            {/* {userId && (
               <form action={signOut}>
                 <Button type="submit" variant="ghost" size="icon" title="Sign Out">
                   <LogOut className="h-5 w-5" />
                 </Button>
               </form>
-            )}
+            )} */}
           </CardHeader>
 
           <CardContent className="flex-1 flex flex-col p-0">
@@ -149,11 +141,13 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
                 <Input
                   value={input}
                   onChange={handleInputChange}
-                  placeholder={userId ? "Ask about properties, market trends..." : "Sign in to chat..."}
+                  placeholder={"Ask about properties, market trends..."} // Simplified placeholder
                   className="flex-1"
-                  disabled={isLoading || !userId}
+                  disabled={isLoading} // Removed: || !userId
                 />
-                <Button type="submit" size="icon" disabled={isLoading || !input.trim() || !userId}>
+                <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+                  {" "}
+                  {/* Removed: || !userId */}
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
