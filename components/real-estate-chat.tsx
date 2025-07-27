@@ -1,16 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MessageCircle, Send, Home, X, LogOut } from "lucide-react"
-import { continueConversation, type Message } from "@/app/chat/actions"
-import { readStreamableValue } from "ai/rsc"
 import { signOut } from "@/app/auth/actions"
+import { useChat, type Message } from "@ai-sdk/react" // Import Message from @ai-sdk/react
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 interface RealEstateChatProps {
   userId: string | null
@@ -19,14 +18,23 @@ interface RealEstateChatProps {
 
 export default function RealEstateChat({ userId, initialMessages = [] }: RealEstateChatProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [conversation, setConversation] = useState<Message[]>(initialMessages)
-  const [input, setInput] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const supabase = createSupabaseBrowserClient()
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
+    api: "/api/chat", // Specify the API route for the chat
+    initialMessages: initialMessages,
+    onFinish: (message) => {
+      // This callback fires when the AI response is complete
+      // The assistant message is already saved on the server via onFinish in route.ts
+    },
+  })
 
   useEffect(() => {
-    setConversation(initialMessages)
-  }, [initialMessages])
+    // This effect ensures that if initialMessages change (e.g., after login),
+    // the useChat hook's internal state is updated.
+    setMessages(initialMessages)
+  }, [initialMessages, setMessages])
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -35,40 +43,25 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
         behavior: "smooth",
       })
     }
-  }, [conversation])
+  }, [messages]) // Scroll when messages change
 
   const toggleChat = () => setIsOpen(!isOpen)
 
-  const handleSendMessage = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleUserSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!input.trim() || isLoading) return
+    if (!input.trim() || isLoading || !userId) return
 
-    const userMessage: Message = { id: Date.now().toString(), role: "user", content: input }
-    const newConversation = [...conversation, userMessage]
-    setConversation(newConversation)
-    setInput("")
-    setIsLoading(true)
+    // Save user message to DB immediately
+    const userMessageContent = input
+    const { error } = await supabase.from("chat_messages").insert({
+      user_id: userId,
+      role: "user",
+      content: userMessageContent,
+    })
+    if (error) console.error("Error saving user message:", error)
 
-    try {
-      const { messages: historyFromAction, newMessage } = await continueConversation(newConversation, userId)
-
-      let assistantContent = ""
-      for await (const delta of readStreamableValue(newMessage)) {
-        assistantContent = `${assistantContent}${delta}`
-        setConversation([
-          ...historyFromAction,
-          { id: Date.now().toString(), role: "assistant", content: assistantContent },
-        ])
-      }
-    } catch (error) {
-      console.error("Error sending message:", error)
-      setConversation((prev) => [
-        ...prev,
-        { id: Date.now().toString(), role: "assistant", content: "Sorry, something went wrong. Please try again." },
-      ])
-    } finally {
-      setIsLoading(false)
-    }
+    // Then, let useChat handle the submission to the API route
+    handleSubmit(event)
   }
 
   return (
@@ -98,7 +91,7 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
           <CardContent className="flex-1 flex flex-col p-0">
             <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
               <div className="space-y-4 pb-4">
-                {conversation.length === 0 && (
+                {messages.length === 0 && (
                   <div className="text-center text-muted-foreground py-8">
                     <Home className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p className="text-sm">
@@ -108,14 +101,25 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
                   </div>
                 )}
 
-                {conversation.map((message) => (
+                {messages.map((message) => (
                   <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                     <div
                       className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                         message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                       }`}
                     >
-                      <div className="whitespace-pre-wrap">{message.content}</div>
+                      {message.parts.map((part, i) => {
+                        switch (part.type) {
+                          case "text":
+                            return (
+                              <div key={`${message.id}-${i}`} className="whitespace-pre-wrap">
+                                {part.text}
+                              </div>
+                            )
+                          default:
+                            return null
+                        }
+                      })}
                     </div>
                   </div>
                 ))}
@@ -141,10 +145,10 @@ export default function RealEstateChat({ userId, initialMessages = [] }: RealEst
             </ScrollArea>
 
             <div className="border-t p-4">
-              <form onSubmit={handleSendMessage} className="flex gap-2">
+              <form onSubmit={handleUserSubmit} className="flex gap-2">
                 <Input
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={handleInputChange}
                   placeholder={userId ? "Ask about properties, market trends..." : "Sign in to chat..."}
                   className="flex-1"
                   disabled={isLoading || !userId}

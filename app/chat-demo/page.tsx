@@ -2,7 +2,7 @@ import RealEstateChat from "@/components/real-estate-chat"
 import LoginForm from "@/components/login-form"
 import { getUserSession } from "@/app/auth/actions"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import type { Message } from "@/app/chat/actions"
+import type { Message } from "@ai-sdk/react" // Import Message from @ai-sdk/react
 
 export default async function ChatDemoPage() {
   const session = await getUserSession()

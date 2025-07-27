@@ -1,12 +1,23 @@
 import { openai } from "@ai-sdk/openai"
 import { streamText, tool } from "ai"
 import { z } from "zod"
+import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { cookies } from "next/headers"
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
+  const cookieStore = cookies()
+  const supabase = createSupabaseServerClient()
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const userId = session?.user?.id || null
+
+  let assistantResponseContent = ""
 
   const result = streamText({
     model: openai("gpt-4o"),
@@ -74,6 +85,21 @@ export async function POST(req: Request) {
           }
         },
       }),
+    },
+    onChunk: ({ chunk }) => {
+      if (chunk.type === "text-delta") {
+        assistantResponseContent += chunk.text
+      }
+    },
+    onFinish: async () => {
+      if (userId && assistantResponseContent) {
+        const { error } = await supabase.from("chat_messages").insert({
+          user_id: userId,
+          role: "assistant",
+          content: assistantResponseContent,
+        })
+        if (error) console.error("Error saving assistant message:", error)
+      }
     },
   })
 
