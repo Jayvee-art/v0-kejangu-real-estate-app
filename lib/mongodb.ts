@@ -1,12 +1,5 @@
 import mongoose from "mongoose"
 
-// Get the MongoDB URI from environment variables
-const MONGODB_URI = process.env.MONGODB_URI
-
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable inside .env.local")
-}
-
 interface MongooseCache {
   conn: typeof mongoose | null
   promise: Promise<typeof mongoose> | null
@@ -25,6 +18,13 @@ if (!global.mongooseCache) {
 
 export async function connectDB() {
   try {
+    // Check for MongoDB URI at runtime, not build time
+    const MONGODB_URI = process.env.MONGODB_URI
+
+    if (!MONGODB_URI) {
+      throw new Error("Please define the MONGODB_URI environment variable")
+    }
+
     // If we have a cached connection, return it
     if (cached.conn) {
       console.log("✅ Using cached MongoDB connection")

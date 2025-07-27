@@ -34,6 +34,18 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🌱 Creating test accounts...")
 
+    // Check for required environment variables
+    if (!process.env.MONGODB_URI) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "MONGODB_URI environment variable is not set. Please configure your database connection.",
+          error: "Missing environment variable",
+        },
+        { status: 500 },
+      )
+    }
+
     await connectDB()
 
     const createdUsers = []
@@ -99,7 +111,7 @@ export async function POST(request: NextRequest) {
         },
       ],
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("💥 Test account creation failed:", error)
     return NextResponse.json(
       {

@@ -6,6 +6,19 @@ export async function GET() {
   try {
     console.log("🧪 Starting database connection test...")
 
+    // Check for required environment variables first
+    if (!process.env.MONGODB_URI) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "MONGODB_URI environment variable is not set",
+          error: "Missing environment variable",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      )
+    }
+
     // Test basic connection
     const connectionTest = await testConnection()
 

@@ -1,10 +1,11 @@
-import crypto from "crypto"
-
 /**
  * Generate secure secrets for production use
  * Run this script to generate random secrets for your environment variables
  */
 export function generateSecrets() {
+  // Use dynamic import for crypto to avoid build-time issues
+  const crypto = require("crypto")
+
   const jwtSecret = crypto.randomBytes(64).toString("hex")
   const nextAuthSecret = crypto.randomBytes(64).toString("hex")
 
