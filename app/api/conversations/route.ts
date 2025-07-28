@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/mongodb"
+import { connectDB } from "@/lib/mongodb" // Changed from connectToDatabase
 import { Conversation, User } from "@/lib/models"
 import { verifyToken } from "@/lib/auth"
+import mongoose from "mongoose"
 
 export async function GET(req: NextRequest) {
-  await connectToDatabase()
+  await connectDB() // Changed from connectToDatabase
   const authResult = await verifyToken(req)
 
   if (authResult.status !== 200) {
@@ -75,7 +76,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  await connectToDatabase()
+  await connectDB() // Changed from connectToDatabase
   const authResult = await verifyToken(req)
 
   if (authResult.status !== 200) {
@@ -91,6 +92,13 @@ export async function POST(req: NextRequest) {
 
   if (currentUser._id.toString() === recipientId) {
     return NextResponse.json({ message: "Cannot start a conversation with yourself" }, { status: 400 })
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(recipientId)) {
+    return NextResponse.json({ message: "Invalid recipient ID format" }, { status: 400 })
+  }
+  if (propertyId && !mongoose.Types.ObjectId.isValid(propertyId)) {
+    return NextResponse.json({ message: "Invalid property ID format" }, { status: 400 })
   }
 
   try {

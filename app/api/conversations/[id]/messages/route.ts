@@ -1,11 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { connectToDatabase } from "@/lib/mongodb"
+import { connectDB } from "@/lib/mongodb" // Changed from connectToDatabase
 import { Conversation, Message } from "@/lib/models"
 import { verifyToken } from "@/lib/auth"
 import mongoose from "mongoose"
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  await connectToDatabase()
+  await connectDB() // Changed from connectToDatabase
   const authResult = await verifyToken(req)
 
   if (authResult.status !== 200) {
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  await connectToDatabase()
+  await connectDB() // Changed from connectToDatabase
   const authResult = await verifyToken(req)
 
   if (authResult.status !== 200) {

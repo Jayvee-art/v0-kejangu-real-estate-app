@@ -8,6 +8,7 @@ module.exports = {
     "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
+  prefix: "",
   theme: {
     container: {
       center: true,
@@ -43,20 +44,6 @@ module.exports = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
-        calendar: {
-          border: "hsl(var(--border))",
-          background: "hsl(var(--background))",
-          foreground: "hsl(var(--foreground))",
-          day: {
-            DEFAULT: "hsl(var(--foreground))",
-            selected: "hsl(var(--primary))",
-            today: "hsl(var(--accent))",
-            outside: "hsl(var(--muted-foreground))",
-            disabled: "hsl(var(--muted-foreground))",
-            range_middle: "hsl(var(--accent))",
-            range_end: "hsl(var(--primary))",
-          },
-        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -73,12 +60,12 @@ module.exports = {
       },
       keyframes: {
         "accordion-down": {
-          from: { height: 0 },
+          from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
           from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: 0 },
+          to: { height: "0" },
         },
       },
       animation: {

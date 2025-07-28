@@ -5,6 +5,8 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { connectDB } from "@/lib/mongodb"
 import { User } from "@/lib/models"
+import jwt from "jsonwebtoken"
+import type { NextRequest } from "next/server"
 
 // Generate a fallback secret for development
 const generateFallbackSecret = () => {
@@ -17,6 +19,43 @@ const generateFallbackSecret = () => {
 }
 
 const secret = process.env.NEXTAUTH_SECRET || generateFallbackSecret()
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-jwt-secret-for-development-only"
+
+interface DecodedToken {
+  userId: string
+  email: string
+  role: string
+  iat: number
+  exp: number
+}
+
+export async function verifyToken(req: NextRequest) {
+  const authHeader = req.headers.get("authorization")
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return { status: 401, message: "Unauthorized: No token provided or invalid format" }
+  }
+
+  const token = authHeader.split(" ")[1]
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken
+    await connectDB() // Ensure DB connection for user lookup
+    const user = await User.findById(decoded.userId).select("-password") // Fetch user to ensure they exist and get full details
+
+    if (!user) {
+      return { status: 404, message: "Unauthorized: User not found" }
+    }
+
+    // Return the full user object from DB, not just decoded token
+    return { status: 200, user: user.toObject() }
+  } catch (error) {
+    console.error("Token verification error:", error)
+    if (error instanceof jwt.JsonWebTokenError) {
+      return { status: 401, message: "Unauthorized: Invalid or expired token" }
+    }
+    return { status: 500, message: "Internal server error during token verification" }
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   secret,

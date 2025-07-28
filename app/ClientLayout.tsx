@@ -2,50 +2,45 @@
 
 import type React from "react"
 
-import "./globals.css"
-import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
+import { AuthProvider } from "@/components/auth-provider"
 import { ChatAssistant } from "@/components/chat-assistant"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { MessageSquare } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
 import { ChatLayout } from "@/components/chat/chat-layout"
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { MessageSquare } from "lucide-react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 
-const inter = Inter({ subsets: ["latin"] })
-
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+export function ClientLayout({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth()
   const [isChatOpen, setIsChatOpen] = useState(false)
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
-            {children}
-            <ChatAssistant /> {/* Floating chatbot */}
-            <Toaster />
+    <AuthProvider>
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        {children}
+        <Toaster />
+        {!isLoading && user && (
+          <>
+            <ChatAssistant /> {/* Existing AI Chatbot */}
             {/* Floating Chat Button for Direct Messaging */}
+            <Button
+              className="fixed bottom-4 right-4 md:bottom-8 md:right-8 rounded-full w-14 h-14 shadow-lg z-50"
+              onClick={() => setIsChatOpen(true)}
+              aria-label="Open direct messages"
+            >
+              <MessageSquare className="h-6 w-6" />
+            </Button>
             <Dialog open={isChatOpen} onOpenChange={setIsChatOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="fixed bottom-4 right-4 md:bottom-8 md:right-8 rounded-full h-14 w-14 shadow-lg z-50"
-                  aria-label="Open chat messages"
-                >
-                  <MessageSquare className="h-7 w-7" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="p-0 border-none bg-transparent max-w-none w-auto h-auto">
-                <ChatLayout />
+              <DialogContent className="p-0 max-w-4xl h-[90vh] flex flex-col">
+                <ChatLayout onClose={() => setIsChatOpen(false)} />
               </DialogContent>
             </Dialog>
-          </AuthProvider>
-        </ThemeProvider>
-      </body>
-    </html>
+          </>
+        )}
+      </ThemeProvider>
+    </AuthProvider>
   )
 }

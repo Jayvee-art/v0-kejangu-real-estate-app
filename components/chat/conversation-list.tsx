@@ -1,31 +1,33 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import * as React from "react"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { formatDistanceToNow } from "date-fns"
-import { MessageSquare, Loader2 } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { formatDistanceToNowStrict } from "date-fns"
+import { Building2, MessageSquare } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import Link from "next/link"
 
-interface Conversation {
+interface ConversationItem {
   _id: string
-  participants: {
+  otherParticipant: {
     _id: string
     name: string
     email: string
-  }[]
-  lastMessage?: {
-    _id: string
+    role: string
+  } | null
+  lastMessage: {
     content: string
-    sender: string
     createdAt: string
-  }
-  property?: {
+    senderName: string
+  } | null
+  property: {
     _id: string
     title: string
-  }
+    imageUrl?: string
+  } | null
   createdAt: string
   updatedAt: string
 }
@@ -38,112 +40,149 @@ interface ConversationListProps {
 export function ConversationList({ onSelectConversation, selectedConversationId }: ConversationListProps) {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [conversations, setConversations] = React.useState<ConversationItem[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [searchTerm, setSearchTerm] = React.useState("")
 
-  useEffect(() => {
-    const fetchConversations = async () => {
-      if (!user) return
+  const fetchConversations = React.useCallback(async () => {
+    if (!user) return
 
-      setIsLoading(true)
-      try {
-        const token = localStorage.getItem("token")
-        const response = await fetch("/api/conversations", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch("/api/conversations", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
-        if (response.ok) {
-          const data = await response.json()
-          setConversations(data)
-        } else {
-          const errorData = await response.json()
-          toast({
-            title: "Error",
-            description: errorData.message || "Failed to fetch conversations.",
-            variant: "destructive",
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching conversations:", error)
+      if (response.ok) {
+        const data: ConversationItem[] = await response.json()
+        setConversations(data)
+      } else {
+        const errorData = await response.json()
         toast({
           title: "Error",
-          description: "Something went wrong while fetching conversations.",
+          description: errorData.message || "Failed to fetch conversations.",
           variant: "destructive",
         })
-      } finally {
-        setIsLoading(false)
       }
+    } catch (error) {
+      console.error("Error fetching conversations:", error)
+      toast({
+        title: "Error",
+        description: "Something went wrong while fetching conversations.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchConversations()
   }, [user, toast])
+
+  React.useEffect(() => {
+    fetchConversations()
+    // Optional: Set up polling for real-time updates (e.g., every 5 seconds)
+    const interval = setInterval(fetchConversations, 5000)
+    return () => clearInterval(interval)
+  }, [fetchConversations])
+
+  const filteredConversations = conversations.filter((conv) => {
+    const searchLower = searchTerm.toLowerCase()
+    const participantName = conv.otherParticipant?.name.toLowerCase() || ""
+    const propertyTitle = conv.property?.title.toLowerCase() || ""
+    const lastMessageContent = conv.lastMessage?.content.toLowerCase() || ""
+
+    return (
+      participantName.includes(searchLower) ||
+      propertyTitle.includes(searchLower) ||
+      lastMessageContent.includes(searchLower)
+    )
+  })
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500">
-        <Loader2 className="h-8 w-8 animate-spin mb-2" />
-        <p>Loading conversations...</p>
-      </div>
-    )
-  }
-
-  if (conversations.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500 p-4 text-center">
-        <MessageSquare className="h-12 w-12 mb-4" />
-        <p className="text-lg font-semibold">No conversations yet</p>
-        <p className="text-sm">Start a new chat from a property listing or wait for a message.</p>
+      <div className="flex flex-col gap-2 p-4">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="flex items-center space-x-3 animate-pulse">
+            <Avatar className="h-10 w-10 bg-gray-200 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4" />
+              <div className="h-3 bg-gray-200 rounded w-1/2" />
+            </div>
+          </div>
+        ))}
       </div>
     )
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-4">
-        {conversations.map((conversation) => {
-          const otherParticipant = conversation.participants.find((p) => p._id !== user?.id)
-          if (!otherParticipant) return null // Should not happen if conversation is valid
-
-          return (
-            <div
-              key={conversation._id}
-              className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer mb-2 transition-colors ${
-                selectedConversationId === conversation._id ? "bg-blue-50" : "hover:bg-gray-100"
-              }`}
-              onClick={() => onSelectConversation(conversation._id)}
-            >
-              <Link href={`/profile/${otherParticipant._id}`} className="flex-shrink-0">
-                <Avatar>
-                  <AvatarImage src={`/placeholder.svg?text=${otherParticipant.name.charAt(0)}`} />
-                  <AvatarFallback>{otherParticipant.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-              </Link>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center">
-                  <Link href={`/profile/${otherParticipant._id}`}>
-                    <h3 className="font-semibold text-gray-900 truncate">{otherParticipant.name}</h3>
-                  </Link>
-                  {conversation.lastMessage && (
-                    <span className="text-xs text-gray-500 flex-shrink-0">
-                      {formatDistanceToNow(new Date(conversation.lastMessage.createdAt), { addSuffix: true })}
-                    </span>
+    <div className="flex h-full flex-col">
+      <div className="p-4 border-b">
+        <h2 className="text-xl font-semibold mb-2">Messages</h2>
+        <Input
+          placeholder="Search conversations..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-2">
+          {filteredConversations.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">
+              <MessageSquare className="h-10 w-10 mx-auto mb-3" />
+              <p>No conversations found.</p>
+              <p className="text-sm">Start a chat from a property listing.</p>
+            </div>
+          ) : (
+            filteredConversations.map((conv) => (
+              <div
+                key={conv._id}
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
+                  selectedConversationId === conv._id ? "bg-gray-100" : ""
+                }`}
+                onClick={() => onSelectConversation(conv._id)}
+              >
+                <Link href={`/profile/${conv.otherParticipant?._id}`} className="flex-shrink-0">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage
+                      src={`https://api.dicebear.com/7.x/initials/svg?seed=${conv.otherParticipant?.name}`}
+                    />
+                    <AvatarFallback>
+                      {conv.otherParticipant?.name
+                        ? conv.otherParticipant.name.charAt(0).toUpperCase()
+                        : conv.property?.title.charAt(0).toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-center">
+                    <Link href={`/profile/${conv.otherParticipant?._id}`}>
+                      <p className="font-medium truncate">{conv.otherParticipant?.name || "Unknown User"}</p>
+                    </Link>
+                    {conv.lastMessage && (
+                      <span className="text-xs text-gray-500 flex-shrink-0">
+                        {formatDistanceToNowStrict(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
+                      </span>
+                    )}
+                  </div>
+                  {conv.property && (
+                    <p className="text-xs text-gray-600 truncate flex items-center gap-1">
+                      <Building2 className="h-3 w-3" />
+                      {conv.property.title}
+                    </p>
+                  )}
+                  {conv.lastMessage ? (
+                    <p className="text-sm text-gray-500 truncate">{conv.lastMessage.content}</p>
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No messages yet.</p>
                   )}
                 </div>
-                {conversation.property && (
-                  <p className="text-xs text-blue-600 truncate">Property: {conversation.property.title}</p>
-                )}
-                {conversation.lastMessage ? (
-                  <p className="text-sm text-gray-600 truncate">{conversation.lastMessage.content}</p>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">No messages yet</p>
-                )}
               </div>
-            </div>
-          )
-        })}
-      </div>
-    </ScrollArea>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   )
 }

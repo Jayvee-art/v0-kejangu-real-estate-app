@@ -1,16 +1,14 @@
 "use client"
 
-import { DialogDescription } from "@/components/ui/dialog"
-
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import * as React from "react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { useAuth } from "@/components/auth-provider"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
 interface NewConversationDialogProps {
   open: boolean
@@ -29,65 +27,92 @@ export function NewConversationDialog({
   propertyId,
   propertyName,
 }: NewConversationDialogProps) {
-  const { user } = useAuth()
+  const [messageContent, setMessageContent] = React.useState("")
+  const [isLoading, setIsLoading] = React.useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
   const router = useRouter()
-  const [messageContent, setMessageContent] = useState("")
-  const [isSending, setIsSending] = useState(false)
 
-  const handleStartConversation = async () => {
-    if (!user || !messageContent.trim()) {
+  React.useEffect(() => {
+    if (!open) {
+      setMessageContent("") // Reset message when dialog closes
+    }
+  }, [open])
+
+  const handleStartConversation = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!user) {
       toast({
-        title: "Error",
-        description: "Message cannot be empty.",
+        title: "Authentication Required",
+        description: "Please log in to start a conversation.",
+        variant: "destructive",
+      })
+      router.push("/auth/login")
+      return
+    }
+
+    if (!messageContent.trim()) {
+      toast({
+        title: "Message Required",
+        description: "Please type a message to start the conversation.",
         variant: "destructive",
       })
       return
     }
 
-    setIsSending(true)
+    setIsLoading(true)
     try {
       const token = localStorage.getItem("token")
-      const response = await fetch("/api/conversations", {
+      const conversationResponse = await fetch("/api/conversations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          recipientId,
-          propertyId,
-          initialMessage: messageContent,
-        }),
+        body: JSON.stringify({ recipientId, propertyId }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        toast({
-          title: "Success",
-          description: "Conversation started successfully!",
-        })
-        setMessageContent("")
-        onOpenChange(false)
-        // Redirect to the chat layout with the new conversation selected
-        router.push(`/messages?conversationId=${data.conversationId}`)
-      } else {
-        const errorData = await response.json()
-        toast({
-          title: "Error",
-          description: errorData.message || "Failed to start conversation.",
-          variant: "destructive",
-        })
+      const convData = await conversationResponse.json()
+
+      if (!conversationResponse.ok && conversationResponse.status !== 200) {
+        // 200 means conversation already exists, which is fine
+        throw new Error(convData.message || "Failed to create/find conversation.")
       }
-    } catch (error) {
+
+      const conversationId = convData.conversationId
+
+      // Send the initial message
+      const messageResponse = await fetch(`/api/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: messageContent }),
+      })
+
+      if (messageResponse.ok) {
+        toast({
+          title: "Message Sent!",
+          description: `Your message has been sent to ${recipientName}.`,
+        })
+        onOpenChange(false)
+        // Optionally, open the chat layout directly
+        // router.push(`/messages?conversationId=${conversationId}`);
+      } else {
+        const msgData = await messageResponse.json()
+        throw new Error(msgData.message || "Failed to send message.")
+      }
+    } catch (error: any) {
       console.error("Error starting conversation:", error)
       toast({
         title: "Error",
-        description: "Something went wrong.",
+        description: error.message || "Something went wrong. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsSending(false)
+      setIsLoading(false)
     }
   }
 
@@ -95,31 +120,39 @@ export function NewConversationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>New Conversation with {recipientName}</DialogTitle>
-          {propertyName && <DialogDescription>Regarding property: {propertyName}</DialogDescription>}
+          <DialogTitle>Message {recipientName}</DialogTitle>
+          <DialogDescription>
+            {propertyName ? `About property: ${propertyName}` : "Start a direct conversation."}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
+        <form onSubmit={handleStartConversation} className="space-y-4">
+          <div className="space-y-2">
             <Label htmlFor="message">Your Message</Label>
             <Textarea
               id="message"
-              placeholder="Type your initial message here..."
               value={messageContent}
               onChange={(e) => setMessageContent(e.target.value)}
+              placeholder="Type your message here..."
               rows={5}
-              disabled={isSending}
+              required
             />
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
-            Cancel
-          </Button>
-          <Button onClick={handleStartConversation} disabled={isSending}>
-            {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Send Message
-          </Button>
-        </DialogFooter>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading || !messageContent.trim()}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                "Send Message"
+              )}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

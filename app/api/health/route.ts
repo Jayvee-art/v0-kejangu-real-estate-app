@@ -1,47 +1,17 @@
 import { NextResponse } from "next/server"
+import { connectDB } from "@/lib/mongodb"
+import { User } from "@/lib/models"
 
 export async function GET() {
   try {
-    // Check critical environment variables
-    const requiredVars = {
-      MONGODB_URI: !!process.env.MONGODB_URI,
-      JWT_SECRET: !!process.env.JWT_SECRET,
-      NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
-      NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
-    }
+    // Test database connection
+    await connectDB()
+    // Test a simple query to ensure the database is responsive
+    await User.findOne({})
 
-    const optionalVars = {
-      GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
-      FACEBOOK_CLIENT_ID: !!process.env.FACEBOOK_CLIENT_ID,
-      FACEBOOK_CLIENT_SECRET: !!process.env.FACEBOOK_CLIENT_SECRET,
-    }
-
-    const missingRequired = Object.entries(requiredVars)
-      .filter(([_, exists]) => !exists)
-      .map(([key]) => key)
-
-    const isHealthy = missingRequired.length === 0
-
-    return NextResponse.json({
-      status: isHealthy ? "healthy" : "unhealthy",
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV,
-      requiredVars,
-      optionalVars,
-      missingRequired,
-      message: isHealthy
-        ? "All required environment variables are set"
-        : `Missing required variables: ${missingRequired.join(", ")}`,
-    })
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        status: "error",
-        timestamp: new Date().toISOString(),
-        error: error.message,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ status: "ok", database: "connected" }, { status: 200 })
+  } catch (error) {
+    console.error("Health check failed:", error)
+    return NextResponse.json({ status: "error", database: "disconnected", message: error.message }, { status: 500 })
   }
 }

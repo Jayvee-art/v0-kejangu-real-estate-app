@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { testConnection } from "@/lib/mongodb"
+import { connectDB } from "@/lib/mongodb"
 import { User } from "@/lib/models"
 
 export async function GET() {
@@ -19,20 +19,8 @@ export async function GET() {
       )
     }
 
-    // Test basic connection
-    const connectionTest = await testConnection()
-
-    if (!connectionTest.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Database connection failed",
-          error: connectionTest.message,
-          timestamp: new Date().toISOString(),
-        },
-        { status: 500 },
-      )
-    }
+    // Connect to the database
+    await connectDB()
 
     // Test model operations
     console.log("📊 Testing User model operations...")
@@ -40,7 +28,7 @@ export async function GET() {
     console.log("👥 Total users in database:", userCount)
 
     // Test a simple query
-    const sampleUsers = await User.find().limit(3).select("name email role createdAt")
+    const sampleUsers = await User.find({}).limit(5).select("name email role createdAt")
     console.log("📋 Sample users:", sampleUsers)
 
     return NextResponse.json({
@@ -66,7 +54,7 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        message: "Database test failed",
+        message: "Database connection or query failed",
         error: error.message,
         errorType: error.name,
         timestamp: new Date().toISOString(),

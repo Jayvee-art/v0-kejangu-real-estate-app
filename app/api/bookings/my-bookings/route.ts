@@ -1,17 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { connectMongoDB } from "@/lib/mongodb"
+import { connectDB } from "@/lib/mongodb"
 import { Booking } from "@/lib/models"
-import { getToken } from "@/lib/auth"
+import { verifyToken } from "@/lib/auth"
 import mongoose from "mongoose"
 
 export async function GET(request: NextRequest) {
   try {
-    await connectMongoDB()
-    const token = await getToken(request)
-
-    if (!token) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    const authResult = await verifyToken(request)
+    if (authResult.status !== 200) {
+      return NextResponse.json({ message: authResult.message }, { status: authResult.status })
     }
+    const currentUser = authResult.user
+
+    await connectDB()
 
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId")
@@ -26,7 +27,10 @@ export async function GET(request: NextRequest) {
       query.tenant = new mongoose.Types.ObjectId(userId)
     } else {
       // Otherwise, fetch bookings for the authenticated user
-      query.tenant = new mongoose.Types.ObjectId(token.id)
+      if (currentUser.role !== "tenant") {
+        return NextResponse.json({ message: "Only tenants can view their own bookings" }, { status: 403 })
+      }
+      query.tenant = new mongoose.Types.ObjectId(currentUser._id)
     }
 
     const bookings = await Booking.find(query)

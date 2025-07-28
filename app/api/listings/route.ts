@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
 import { connectDB } from "@/lib/mongodb"
 import { Listing } from "@/lib/models"
+import { verifyToken } from "@/lib/auth"
 
 // GET all listings
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await connectDB()
 
@@ -20,22 +20,13 @@ export async function GET() {
 // POST new listing
 export async function POST(request: NextRequest) {
   try {
-    const JWT_SECRET = process.env.JWT_SECRET
-
-    if (!JWT_SECRET) {
-      console.error("JWT_SECRET environment variable is not set")
-      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    const authResult = await verifyToken(request)
+    if (authResult.status !== 200) {
+      return NextResponse.json({ message: authResult.message }, { status: authResult.status })
     }
+    const currentUser = authResult.user
 
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split(" ")[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as any
-
-    if (decoded.role !== "landlord") {
+    if (currentUser.role !== "landlord") {
       return NextResponse.json({ message: "Only landlords can create listings" }, { status: 403 })
     }
 
@@ -53,7 +44,7 @@ export async function POST(request: NextRequest) {
       price,
       location,
       imageUrl,
-      landlord: decoded.userId,
+      landlord: currentUser._id,
     })
 
     const populatedListing = await Listing.findById(listing._id).populate("landlord", "name email")

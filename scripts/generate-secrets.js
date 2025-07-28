@@ -4,9 +4,13 @@ const crypto = require("crypto")
  * Generate secure secrets for production use
  * Run: node scripts/generate-secrets.js
  */
+function generateSecret(length = 32) {
+  return crypto.randomBytes(length).toString("hex")
+}
+
 function generateSecrets() {
-  const jwtSecret = crypto.randomBytes(64).toString("hex")
-  const nextAuthSecret = crypto.randomBytes(64).toString("hex")
+  const jwtSecret = generateSecret(32)
+  const nextAuthSecret = generateSecret(32)
 
   console.log("🔐 Generated Secure Secrets:")
   console.log("=".repeat(50))

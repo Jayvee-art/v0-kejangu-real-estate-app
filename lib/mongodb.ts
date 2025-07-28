@@ -10,10 +10,10 @@ declare global {
   var mongooseCache: MongooseCache | undefined
 }
 
-const cached: MongooseCache = global.mongooseCache || { conn: null, promise: null }
+const cached: MongooseCache = (global as any).mongooseCache || { conn: null, promise: null }
 
-if (!global.mongooseCache) {
-  global.mongooseCache = cached
+if (!(global as any).mongooseCache) {
+  ;(global as any).mongooseCache = cached
 }
 
 export async function connectDB() {
@@ -22,7 +22,7 @@ export async function connectDB() {
     const MONGODB_URI = process.env.MONGODB_URI
 
     if (!MONGODB_URI) {
-      throw new Error("Please define the MONGODB_URI environment variable")
+      throw new Error("Please define the MONGODB_URI environment variable inside .env.local")
     }
 
     // If we have a cached connection, return it

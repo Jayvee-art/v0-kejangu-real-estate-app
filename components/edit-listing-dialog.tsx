@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import Image from "next/image"
-import { Upload } from "lucide-react"
+import { Loader2 } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
 
 interface Listing {
   _id: string
@@ -22,73 +23,75 @@ interface Listing {
 }
 
 interface EditListingDialogProps {
-  listing: Listing
   open: boolean
   onOpenChange: (open: boolean) => void
+  listing: Listing
   onSuccess: () => void
 }
 
-export function EditListingDialog({ listing, open, onOpenChange, onSuccess }: EditListingDialogProps) {
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    price: "",
-    location: "",
-    currentImageUrl: "", // Keep track of current image URL
-  })
+export function EditListingDialog({ open, onOpenChange, listing, onSuccess }: EditListingDialogProps) {
+  const [title, setTitle] = useState(listing.title)
+  const [description, setDescription] = useState(listing.description)
+  const [price, setPrice] = useState(listing.price.toString())
+  const [location, setLocation] = useState(listing.location)
+  const [imageUrl, setImageUrl] = useState(listing.imageUrl || "")
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     if (listing) {
-      setFormData({
-        title: listing.title,
-        description: listing.description,
-        price: listing.price.toString(),
-        location: listing.location,
-        currentImageUrl: listing.imageUrl || "", // Set current image URL
-      })
-      setSelectedImageFile(null) // Clear selected file on new listing prop
+      setTitle(listing.title)
+      setDescription(listing.description)
+      setPrice(listing.price.toString())
+      setLocation(listing.location)
+      setImageUrl(listing.imageUrl || "")
     }
   }, [listing])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
 
-    let finalImageUrl = formData.currentImageUrl // Default to current image
-
-    if (selectedImageFile) {
-      const uploadFormData = new FormData()
-      uploadFormData.append("image", selectedImageFile)
-
-      try {
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: uploadFormData,
-        })
-
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json()
-          throw new Error(errorData.message || "Image upload failed")
-        }
-        const uploadData = await uploadResponse.json()
-        finalImageUrl = uploadData.imageUrl
-        toast({
-          title: "Image Uploaded",
-          description: "New property image uploaded successfully.",
-        })
-      } catch (uploadError: any) {
-        toast({
-          title: "Image Upload Error",
-          description: uploadError.message,
-          variant: "destructive",
-        })
-        setIsLoading(false)
-        return
-      }
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to edit a listing.",
+        variant: "destructive",
+      })
+      router.push("/auth/login")
+      return
     }
+
+    if (user.role !== "landlord") {
+      toast({
+        title: "Permission Denied",
+        description: "Only landlords can edit listings.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!title || !description || !price || !location) {
+      toast({
+        title: "Missing Fields",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const parsedPrice = Number.parseFloat(price)
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      toast({
+        title: "Invalid Price",
+        description: "Please enter a valid positive number for the price.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsLoading(true)
 
     try {
       const token = localStorage.getItem("token")
@@ -98,32 +101,29 @@ export function EditListingDialog({ listing, open, onOpenChange, onSuccess }: Ed
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...formData,
-          price: Number.parseFloat(formData.price),
-          imageUrl: finalImageUrl, // Use the new or existing URL
-        }),
+        body: JSON.stringify({ title, description, price: parsedPrice, location, imageUrl }),
       })
 
       if (response.ok) {
         toast({
           title: "Success",
-          description: "Property listing updated successfully",
+          description: "Listing updated successfully!",
         })
-        setSelectedImageFile(null) // Clear selected file
         onSuccess()
+        onOpenChange(false)
       } else {
         const data = await response.json()
         toast({
-          title: "Error",
-          description: data.message || "Failed to update listing",
+          title: "Failed to update listing",
+          description: data.message || "Something went wrong.",
           variant: "destructive",
         })
       }
     } catch (error) {
+      console.error("Edit listing error:", error)
       toast({
         title: "Error",
-        description: "Something went wrong",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -135,87 +135,83 @@ export function EditListingDialog({ listing, open, onOpenChange, onSuccess }: Ed
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit Property</DialogTitle>
-          <DialogDescription>Update your rental listing details.</DialogDescription>
+          <DialogTitle>Edit Property Listing</DialogTitle>
+          <DialogDescription>Update the details for your rental property.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Property Title</Label>
+        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="title" className="text-right">
+              Title
+            </Label>
             <Input
               id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              placeholder="e.g., Modern 2BR Apartment"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="col-span-3"
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
-            <Input
-              id="location"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="e.g., Downtown, City Center"
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="description" className="text-right">
+              Description
+            </Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="col-span-3"
               required
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="price">Monthly Rent ($)</Label>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="price" className="text-right">
+              Price (KSh/month)
+            </Label>
             <Input
               id="price"
               type="number"
-              value={formData.price}
-              onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-              placeholder="e.g., 1200"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              className="col-span-3"
               required
+              min="0"
+              step="any"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe your property..."
-              rows={3}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="image">Property Image (optional)</Label>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="location" className="text-right">
+              Location
+            </Label>
             <Input
-              id="image"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setSelectedImageFile(e.target.files ? e.target.files[0] : null)}
-              className="cursor-pointer"
+              id="location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="col-span-3"
+              required
             />
-            {(selectedImageFile || formData.currentImageUrl) && (
-              <div className="mt-2 relative w-full h-32 rounded-md overflow-hidden border border-gray-200">
-                <Image
-                  src={
-                    selectedImageFile
-                      ? URL.createObjectURL(selectedImageFile)
-                      : formData.currentImageUrl || "/placeholder.svg"
-                  }
-                  alt="Property preview"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            )}
-            {!selectedImageFile && !formData.currentImageUrl && (
-              <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
-                <Upload className="h-4 w-4" /> Max 5MB, JPG/PNG
-              </p>
-            )}
           </div>
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="imageUrl" className="text-right">
+              Image URL
+            </Label>
+            <Input
+              id="imageUrl"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              className="col-span-3"
+              placeholder="Optional: Link to property image"
+            />
+          </div>
+          <div className="flex justify-end">
             <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Updating..." : "Update Property"}
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
           </div>
         </form>

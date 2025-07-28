@@ -7,7 +7,8 @@ interface User {
   id: string
   name: string
   email: string
-  role: "landlord" | "tenant"
+  role: "landlord" | "tenant" | "admin" // Added admin role
+  _id: string // Added _id for consistency with Mongoose documents
 }
 
 interface AuthContextType {
@@ -30,8 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (token && userData) {
       try {
-        setUser(JSON.parse(userData))
+        const parsedUser = JSON.parse(userData)
+        // Ensure _id is present, if not, map id to _id for consistency
+        if (!parsedUser._id && parsedUser.id) {
+          parsedUser._id = parsedUser.id
+        }
+        setUser(parsedUser)
       } catch (error) {
+        console.error("Failed to parse user data from localStorage:", error)
         localStorage.removeItem("token")
         localStorage.removeItem("user")
       }
@@ -42,6 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (userData: User, token: string) => {
     localStorage.setItem("token", token)
+    // Ensure _id is set before storing
+    if (!userData._id && userData.id) {
+      userData._id = userData.id
+    }
     localStorage.setItem("user", JSON.stringify(userData))
     setUser(userData)
   }

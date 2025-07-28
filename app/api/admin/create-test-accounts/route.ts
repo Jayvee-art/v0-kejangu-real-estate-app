@@ -1,125 +1,90 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { connectDB } from "@/lib/mongodb"
-import { User } from "@/lib/models"
+import { User, Listing, Booking } from "@/lib/models"
 
-const testUsers = [
-  {
-    name: "Test Landlord",
-    email: "landlord@test.com",
-    password: "123456",
-    role: "landlord",
-    country: "KE",
-    phone: "+254700000001",
-  },
-  {
-    name: "Test Tenant",
-    email: "tenant@test.com",
-    password: "123456",
-    role: "tenant",
-    country: "KE",
-    phone: "+254700000002",
-  },
-  {
-    name: "John Landlord",
-    email: "john.landlord@example.com",
-    password: "password123",
-    role: "landlord",
-    country: "KE",
-    phone: "+254700000003",
-  },
-]
-
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
-    console.log("🌱 Creating test accounts...")
-
-    // Check for required environment variables
-    if (!process.env.MONGODB_URI) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "MONGODB_URI environment variable is not set. Please configure your database connection.",
-          error: "Missing environment variable",
-        },
-        { status: 500 },
-      )
-    }
-
     await connectDB()
 
-    const createdUsers = []
-    const skippedUsers = []
+    // Clear existing test data (optional, for clean slate)
+    await User.deleteMany({ email: { $in: ["landlord@test.com", "tenant@test.com", "admin@test.com"] } })
+    await Listing.deleteMany({})
+    await Booking.deleteMany({})
 
-    for (const userData of testUsers) {
-      try {
-        // Check if user already exists
-        const existingUser = await User.findOne({ email: userData.email })
-        if (existingUser) {
-          console.log(`⚠️ User ${userData.email} already exists`)
-          skippedUsers.push(userData.email)
-          continue
-        }
+    const hashedPassword = await bcrypt.hash("123456", 10)
 
-        // Hash password
-        const hashedPassword = await bcrypt.hash(userData.password, 12)
-
-        // Create user
-        const newUser = await User.create({
-          ...userData,
-          password: hashedPassword,
-          authProvider: "credentials",
-          emailVerified: true,
-          isActive: true,
-          subscribeToUpdates: false,
-        })
-
-        console.log(`✅ Created ${userData.role}: ${userData.email}`)
-        createdUsers.push({
-          email: userData.email,
-          role: userData.role,
-          id: newUser._id,
-        })
-      } catch (userError) {
-        console.error(`❌ Failed to create ${userData.email}:`, userError)
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: "Test accounts creation completed",
-      created: createdUsers,
-      skipped: skippedUsers,
-      testAccounts: [
-        {
-          type: "Landlord",
-          email: "landlord@test.com",
-          password: "123456",
-          description: "Use this to test the landlord dashboard",
-        },
-        {
-          type: "Tenant",
-          email: "tenant@test.com",
-          password: "123456",
-          description: "Use this to test the tenant features",
-        },
-        {
-          type: "Additional Landlord",
-          email: "john.landlord@example.com",
-          password: "password123",
-          description: "Another landlord account for testing",
-        },
-      ],
+    const landlord = await User.create({
+      name: "Test Landlord",
+      email: "landlord@test.com",
+      password: hashedPassword,
+      role: "landlord",
+      country: "Kenya",
+      phone: "+254712345678",
+      emailVerified: true,
     })
-  } catch (error: any) {
-    console.error("💥 Test account creation failed:", error)
+
+    const tenant = await User.create({
+      name: "Test Tenant",
+      email: "tenant@test.com",
+      password: hashedPassword,
+      role: "tenant",
+      country: "Kenya",
+      phone: "+254787654321",
+      emailVerified: true,
+    })
+
+    const admin = await User.create({
+      name: "Test Admin",
+      email: "admin@test.com",
+      password: hashedPassword,
+      role: "admin",
+      emailVerified: true,
+    })
+
+    const listing1 = await Listing.create({
+      title: "Spacious Apartment in Westlands",
+      description: "A beautiful 3-bedroom apartment with modern amenities and city views.",
+      price: 75000,
+      location: "Westlands",
+      imageUrl: "/placeholder.svg?height=400&width=600",
+      landlord: landlord._id,
+    })
+
+    const listing2 = await Listing.create({
+      title: "Cozy House in Karen",
+      description: "A charming 4-bedroom house with a large garden, perfect for families.",
+      price: 120000,
+      location: "Karen",
+      imageUrl: "/placeholder.svg?height=400&width=600",
+      landlord: landlord._id,
+    })
+
+    await Booking.create({
+      property: listing1._id,
+      tenant: tenant._id,
+      landlord: landlord._id,
+      startDate: new Date("2025-08-01"),
+      endDate: new Date("2025-08-15"),
+      totalPrice: listing1.price * 15, // Example calculation
+      status: "pending",
+      notes: "Looking forward to my stay!",
+    })
+
     return NextResponse.json(
       {
-        success: false,
-        message: "Failed to create test accounts",
-        error: error.message,
+        message: "Test accounts and data created successfully!",
+        users: {
+          landlord: landlord.email,
+          tenant: tenant.email,
+          admin: admin.email,
+        },
+        listings: [listing1.title, listing2.title],
       },
-      { status: 500 },
+      { status: 201 },
     )
+  } catch (error) {
+    console.error("Error creating test accounts:", error)
+    return NextResponse.json({ message: "Failed to create test accounts", error: error.message }, { status: 500 })
   }
 }

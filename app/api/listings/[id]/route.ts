@@ -1,25 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
 import { connectDB } from "@/lib/mongodb"
 import { Listing } from "@/lib/models"
+import { verifyToken } from "@/lib/auth"
+import mongoose from "mongoose"
 
 // PUT update listing
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const JWT_SECRET = process.env.JWT_SECRET
-
-    if (!JWT_SECRET) {
-      console.error("JWT_SECRET environment variable is not set")
-      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    const authResult = await verifyToken(request)
+    if (authResult.status !== 200) {
+      return NextResponse.json({ message: authResult.message }, { status: authResult.status })
     }
-
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split(" ")[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const currentUser = authResult.user
 
     await connectDB()
 
@@ -29,8 +21,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Check if user owns the listing
-    if (listing.landlord.toString() !== decoded.userId) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 })
+    if (listing.landlord.toString() !== currentUser._id.toString()) {
+      return NextResponse.json({ message: "Forbidden: You do not own this listing" }, { status: 403 })
     }
 
     const { title, description, price, location, imageUrl } = await request.json()
@@ -44,6 +36,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json(updatedListing)
   } catch (error) {
     console.error("Error updating listing:", error)
+    if (error instanceof mongoose.Error.CastError) {
+      return NextResponse.json({ message: "Invalid listing ID" }, { status: 400 })
+    }
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
@@ -51,20 +46,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 // DELETE listing
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const JWT_SECRET = process.env.JWT_SECRET
-
-    if (!JWT_SECRET) {
-      console.error("JWT_SECRET environment variable is not set")
-      return NextResponse.json({ message: "Server configuration error" }, { status: 500 })
+    const authResult = await verifyToken(request)
+    if (authResult.status !== 200) {
+      return NextResponse.json({ message: authResult.message }, { status: authResult.status })
     }
-
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split(" ")[1]
-    const decoded = jwt.verify(token, JWT_SECRET) as any
+    const currentUser = authResult.user
 
     await connectDB()
 
@@ -74,8 +60,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     // Check if user owns the listing
-    if (listing.landlord.toString() !== decoded.userId) {
-      return NextResponse.json({ message: "Forbidden" }, { status: 403 })
+    if (listing.landlord.toString() !== currentUser._id.toString()) {
+      return NextResponse.json({ message: "Forbidden: You do not own this listing" }, { status: 403 })
     }
 
     await Listing.findByIdAndDelete(params.id)
@@ -83,6 +69,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     return NextResponse.json({ message: "Listing deleted successfully" })
   } catch (error) {
     console.error("Error deleting listing:", error)
+    if (error instanceof mongoose.Error.CastError) {
+      return NextResponse.json({ message: "Invalid listing ID" }, { status: 400 })
+    }
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

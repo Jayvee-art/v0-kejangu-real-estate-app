@@ -2,6 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 
+export async function GET() {
+  return NextResponse.json({ message: "Test portal is active!" }, { status: 200 })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
