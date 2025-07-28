@@ -50,6 +50,8 @@ export default function LoginPage() {
         // Redirect based on role
         if (data.user.role === "landlord") {
           router.push("/dashboard")
+        } else if (data.user.role === "tenant") {
+          router.push("/tenant-dashboard")
         } else {
           router.push("/listings")
         }

@@ -43,6 +43,20 @@ module.exports = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        calendar: {
+          border: "hsl(var(--border))",
+          background: "hsl(var(--background))",
+          foreground: "hsl(var(--foreground))",
+          day: {
+            DEFAULT: "hsl(var(--foreground))",
+            selected: "hsl(var(--primary))",
+            today: "hsl(var(--accent))",
+            outside: "hsl(var(--muted-foreground))",
+            disabled: "hsl(var(--muted-foreground))",
+            range_middle: "hsl(var(--accent))",
+            range_end: "hsl(var(--primary))",
+          },
+        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",

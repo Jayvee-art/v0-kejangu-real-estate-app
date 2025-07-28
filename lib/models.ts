@@ -194,19 +194,148 @@ listingSchema.pre("save", function (next) {
   next()
 })
 
+// Booking Schema
+const bookingSchema = new mongoose.Schema(
+  {
+    property: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Listing",
+      required: [true, "Property is required"],
+      index: true,
+    },
+    tenant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Tenant is required"],
+      index: true,
+    },
+    landlord: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Landlord is required"],
+      index: true,
+    },
+    startDate: {
+      type: Date,
+      required: [true, "Start date is required"],
+    },
+    endDate: {
+      type: Date,
+      required: [true, "End date is required"],
+    },
+    totalPrice: {
+      type: Number,
+      required: [true, "Total price is required"],
+      min: [0, "Total price cannot be negative"],
+    },
+    status: {
+      type: String,
+      enum: {
+        values: ["pending", "confirmed", "cancelled", "completed"],
+        message: "Status must be pending, confirmed, cancelled, or completed",
+      },
+      default: "pending",
+      index: true,
+    },
+    notes: {
+      type: String,
+      maxlength: [500, "Notes cannot exceed 500 characters"],
+    },
+  },
+  {
+    timestamps: true,
+    collection: "bookings",
+  },
+)
+
+// Add indexes for better performance
+bookingSchema.index({ property: 1, startDate: 1, endDate: 1 }) // For availability checks
+bookingSchema.index({ tenant: 1, status: 1 }) // For tenant's bookings
+bookingSchema.index({ landlord: 1, status: 1 }) // For landlord's bookings
+bookingSchema.index({ createdAt: -1 })
+
+// Message Schema
+const messageSchema = new mongoose.Schema(
+  {
+    conversation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Conversation",
+      required: true,
+      index: true,
+    },
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    content: {
+      type: String,
+      required: true,
+      maxlength: [1000, "Message content cannot exceed 1000 characters"],
+    },
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+  },
+  {
+    timestamps: true,
+    collection: "messages",
+  },
+)
+
+// Conversation Schema
+const conversationSchema = new mongoose.Schema(
+  {
+    participants: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+    ],
+    lastMessage: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+    },
+    property: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Listing",
+      required: false, // A conversation might not always be tied to a property
+    },
+  },
+  {
+    timestamps: true,
+    collection: "conversations",
+  },
+)
+
+// Add index for participants to quickly find conversations between two users
+conversationSchema.index({ participants: 1 })
+conversationSchema.index({ property: 1 })
+
 // Export models with error handling
 let User: mongoose.Model<any>
 let Listing: mongoose.Model<any>
+let Booking: mongoose.Model<any>
+let Message: mongoose.Model<any>
+let Conversation: mongoose.Model<any>
 
 try {
   User = mongoose.models.User || mongoose.model("User", userSchema)
   Listing = mongoose.models.Listing || mongoose.model("Listing", listingSchema)
+  Booking = mongoose.models.Booking || mongoose.model("Booking", bookingSchema)
+  Message = mongoose.models.Message || mongoose.model("Message", messageSchema)
+  Conversation = mongoose.models.Conversation || mongoose.model("Conversation", conversationSchema)
 } catch (error) {
   console.error("❌ Error creating models:", error)
   throw error
 }
 
-export { User, Listing }
+export { User, Listing, Booking, Message, Conversation }
 
 // Export schema for testing
 export { userSchema, listingSchema }

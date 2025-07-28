@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import Image from "next/image"
+import { Upload } from "lucide-react"
 
 interface AddListingDialogProps {
   open: boolean
@@ -17,12 +19,12 @@ interface AddListingDialogProps {
 }
 
 export function AddListingDialog({ open, onOpenChange, onSuccess }: AddListingDialogProps) {
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null)
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     price: "",
     location: "",
-    imageUrl: "",
   })
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
@@ -30,6 +32,38 @@ export function AddListingDialog({ open, onOpenChange, onSuccess }: AddListingDi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
+    let uploadedImageUrl = ""
+    if (selectedImageFile) {
+      const uploadFormData = new FormData()
+      uploadFormData.append("image", selectedImageFile)
+
+      try {
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        })
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json()
+          throw new Error(errorData.message || "Image upload failed")
+        }
+        const uploadData = await uploadResponse.json()
+        uploadedImageUrl = uploadData.imageUrl
+        toast({
+          title: "Image Uploaded",
+          description: "Property image uploaded successfully.",
+        })
+      } catch (uploadError: any) {
+        toast({
+          title: "Image Upload Error",
+          description: uploadError.message,
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+    }
 
     try {
       const token = localStorage.getItem("token")
@@ -42,6 +76,7 @@ export function AddListingDialog({ open, onOpenChange, onSuccess }: AddListingDi
         body: JSON.stringify({
           ...formData,
           price: Number.parseFloat(formData.price),
+          imageUrl: uploadedImageUrl, // Use the uploaded URL
         }),
       })
 
@@ -55,8 +90,8 @@ export function AddListingDialog({ open, onOpenChange, onSuccess }: AddListingDi
           description: "",
           price: "",
           location: "",
-          imageUrl: "",
         })
+        setSelectedImageFile(null) // Clear selected file
         onSuccess()
       } else {
         const data = await response.json()
@@ -128,14 +163,29 @@ export function AddListingDialog({ open, onOpenChange, onSuccess }: AddListingDi
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="imageUrl">Image URL (optional)</Label>
+            <Label htmlFor="image">Property Image (optional)</Label>
             <Input
-              id="imageUrl"
-              type="url"
-              value={formData.imageUrl}
-              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="https://example.com/image.jpg"
+              id="image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setSelectedImageFile(e.target.files ? e.target.files[0] : null)}
+              className="cursor-pointer"
             />
+            {selectedImageFile && (
+              <div className="mt-2 relative w-full h-32 rounded-md overflow-hidden border border-gray-200">
+                <Image
+                  src={URL.createObjectURL(selectedImageFile) || "/placeholder.svg"}
+                  alt="Selected preview"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            )}
+            {!selectedImageFile && (
+              <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                <Upload className="h-4 w-4" /> Max 5MB, JPG/PNG
+              </p>
+            )}
           </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

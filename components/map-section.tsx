@@ -5,70 +5,34 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { MapPin, Search, Navigation, Phone, MessageCircle } from "lucide-react"
+import { MapPin, Search, Navigation, Phone, MessageCircle, Loader2 } from "lucide-react"
 
-// Mock property data with coordinates
-const mockProperties = [
-  {
-    id: 1,
-    title: "Modern 2BR Apartment",
-    location: "Westlands, Nairobi",
-    price: 45000,
-    coordinates: { lat: -1.2676, lng: 36.8108 },
-    type: "Apartment",
-    bedrooms: 2,
-    landlord: { name: "John Doe", phone: "+254700000001" },
-  },
-  {
-    id: 2,
-    title: "Spacious 3BR House",
-    location: "Karen, Nairobi",
-    price: 85000,
-    coordinates: { lat: -1.3197, lng: 36.6859 },
-    type: "House",
-    bedrooms: 3,
-    landlord: { name: "Jane Smith", phone: "+254700000002" },
-  },
-  {
-    id: 3,
-    title: "Studio Apartment",
-    location: "Kilimani, Nairobi",
-    price: 25000,
-    coordinates: { lat: -1.2921, lng: 36.7809 },
-    type: "Studio",
-    bedrooms: 1,
-    landlord: { name: "Mike Johnson", phone: "+254700000003" },
-  },
-  {
-    id: 4,
-    title: "Luxury 4BR Villa",
-    location: "Runda, Nairobi",
-    price: 150000,
-    coordinates: { lat: -1.2084, lng: 36.7626 },
-    type: "Villa",
-    bedrooms: 4,
-    landlord: { name: "Sarah Wilson", phone: "+254700000004" },
-  },
-  {
-    id: 5,
-    title: "Cozy 1BR Flat",
-    location: "South B, Nairobi",
-    price: 30000,
-    coordinates: { lat: -1.3031, lng: 36.8344 },
-    type: "Apartment",
-    bedrooms: 1,
-    landlord: { name: "David Brown", phone: "+254700000005" },
-  },
-]
+interface Listing {
+  _id: string
+  title: string
+  description: string
+  price: number
+  location: string
+  imageUrl?: string
+  landlord: {
+    name: string
+    email: string
+    phone?: string
+  }
+  coordinates?: { lat: number; lng: number } // Add coordinates to listing
+}
 
 export function MapSection() {
   const [searchLocation, setSearchLocation] = useState("")
-  const [selectedProperty, setSelectedProperty] = useState<(typeof mockProperties)[0] | null>(null)
-  const [filteredProperties, setFilteredProperties] = useState(mockProperties)
+  const [selectedProperty, setSelectedProperty] = useState<Listing | null>(null)
+  const [allListings, setAllListings] = useState<Listing[]>([]) // Store all fetched listings
+  const [filteredProperties, setFilteredProperties] = useState<Listing[]>([])
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Get user's current location
   useEffect(() => {
+    fetchListings()
+    // Get user's current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -79,23 +43,56 @@ export function MapSection() {
         },
         (error) => {
           console.log("Location access denied or unavailable")
-          // Default to Nairobi center
+          // Default to Nairobi center if location access is denied
           setUserLocation({ lat: -1.2921, lng: 36.8219 })
         },
       )
     } else {
-      // Default to Nairobi center
+      // Default to Nairobi center if geolocation is not supported
       setUserLocation({ lat: -1.2921, lng: 36.8219 })
     }
   }, [])
 
+  useEffect(() => {
+    // Apply initial filter when allListings changes
+    handleSearch()
+  }, [allListings])
+
+  const fetchListings = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/listings")
+      if (response.ok) {
+        const data: Listing[] = await response.json()
+        // For demonstration, assign mock coordinates if not present
+        const listingsWithCoords = data.map((listing) => ({
+          ...listing,
+          coordinates: listing.coordinates || getRandomNairobiCoordinate(), // Assign random if not present
+        }))
+        setAllListings(listingsWithCoords)
+        setFilteredProperties(listingsWithCoords) // Initially show all
+      }
+    } catch (error) {
+      console.error("Error fetching listings:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Helper to generate random coordinates within Nairobi for demonstration
+  const getRandomNairobiCoordinate = () => {
+    const lat = -1.2921 + (Math.random() - 0.5) * 0.1 // Approx. +/- 0.05 deg from Nairobi center
+    const lng = 36.8219 + (Math.random() - 0.5) * 0.1
+    return { lat, lng }
+  }
+
   const handleSearch = () => {
     if (!searchLocation.trim()) {
-      setFilteredProperties(mockProperties)
+      setFilteredProperties(allListings)
       return
     }
 
-    const filtered = mockProperties.filter(
+    const filtered = allListings.filter(
       (property) =>
         property.location.toLowerCase().includes(searchLocation.toLowerCase()) ||
         property.title.toLowerCase().includes(searchLocation.toLowerCase()),
@@ -107,12 +104,16 @@ export function MapSection() {
     if (!userLocation) return
 
     // Sort properties by distance from user location (simplified calculation)
-    const sorted = [...mockProperties].sort((a, b) => {
+    const sorted = [...allListings].sort((a, b) => {
+      // Ensure coordinates exist for sorting
+      const coordsA = a.coordinates || getRandomNairobiCoordinate()
+      const coordsB = b.coordinates || getRandomNairobiCoordinate()
+
       const distanceA = Math.sqrt(
-        Math.pow(a.coordinates.lat - userLocation.lat, 2) + Math.pow(a.coordinates.lng - userLocation.lng, 2),
+        Math.pow(coordsA.lat - userLocation.lat, 2) + Math.pow(coordsA.lng - userLocation.lng, 2),
       )
       const distanceB = Math.sqrt(
-        Math.pow(b.coordinates.lat - userLocation.lat, 2) + Math.pow(b.coordinates.lng - userLocation.lng, 2),
+        Math.pow(coordsB.lat - userLocation.lat, 2) + Math.pow(coordsB.lng - userLocation.lng, 2),
       )
       return distanceA - distanceB
     })
@@ -121,9 +122,11 @@ export function MapSection() {
     setSearchLocation("Near your location")
   }
 
-  const handleWhatsAppContact = (property: (typeof mockProperties)[0]) => {
+  const handleWhatsAppContact = (property: Listing) => {
     const message = `Hi! I'm interested in your property: ${property.title} located at ${property.location}. Can you provide more details?`
-    const whatsappUrl = `https://wa.me/${property.landlord.phone.replace("+", "")}?text=${encodeURIComponent(message)}`
+    // Assuming landlord.phone is available or using a generic number
+    const phoneNumber = property.landlord?.phone || "+254700000000" // Fallback to a generic number
+    const whatsappUrl = `https://wa.me/${phoneNumber.replace("+", "")}?text=${encodeURIComponent(message)}`
     window.open(whatsappUrl, "_blank")
   }
 
@@ -143,23 +146,30 @@ export function MapSection() {
             </div>
 
             {/* Property markers */}
-            {filteredProperties.map((property, index) => (
-              <div
-                key={property.id}
-                className={`absolute w-8 h-8 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 transition-transform ${
-                  selectedProperty?.id === property.id ? "bg-blue-600 scale-110" : ""
-                }`}
-                style={{
-                  left: `${20 + index * 15}%`,
-                  top: `${30 + index * 10}%`,
-                }}
-                onClick={() => setSelectedProperty(property)}
-              >
-                <div className="w-full h-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">{Math.floor(property.price / 1000)}K</span>
-                </div>
+            {isLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
               </div>
-            ))}
+            ) : (
+              filteredProperties.map((property, index) => (
+                <div
+                  key={property._id} // Use _id from MongoDB
+                  className={`absolute w-8 h-8 bg-red-500 rounded-full border-2 border-white shadow-lg cursor-pointer transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 transition-transform ${
+                    selectedProperty?._id === property._id ? "bg-blue-600 scale-110" : ""
+                  }`}
+                  style={{
+                    // Distribute markers randomly for visual variety if no real coordinates
+                    left: `${20 + (((property.coordinates?.lng || getRandomNairobiCoordinate().lng) * 0.5) % 60)}%`,
+                    top: `${30 + (((property.coordinates?.lat || getRandomNairobiCoordinate().lat) * 0.5) % 60)}%`,
+                  }}
+                  onClick={() => setSelectedProperty(property)}
+                >
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">{Math.floor(property.price / 1000)}K</span>
+                  </div>
+                </div>
+              ))
+            )}
 
             {/* User location marker */}
             {userLocation && (
@@ -206,19 +216,31 @@ export function MapSection() {
 
         {/* Property Results */}
         <div className="space-y-4 max-h-96 overflow-y-auto">
-          {filteredProperties.length === 0 ? (
+          {filteredProperties.length === 0 && !isLoading ? (
             <Card>
               <CardContent className="p-6 text-center">
                 <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No properties found in this location</p>
               </CardContent>
             </Card>
+          ) : isLoading ? (
+            <div className="grid gap-4">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardContent className="p-4">
+                    <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
+                    <div className="h-10 bg-gray-200 rounded w-full"></div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
             filteredProperties.map((property) => (
               <Card
-                key={property.id}
+                key={property._id} // Use _id
                 className={`cursor-pointer transition-all hover:shadow-md ${
-                  selectedProperty?.id === property.id ? "ring-2 ring-blue-500 shadow-md" : ""
+                  selectedProperty?._id === property._id ? "ring-2 ring-blue-500 shadow-md" : ""
                 }`}
                 onClick={() => setSelectedProperty(property)}
               >
@@ -237,8 +259,9 @@ export function MapSection() {
 
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">
-                      <Badge variant="outline">{property.type}</Badge>
-                      <Badge variant="outline">{property.bedrooms} BR</Badge>
+                      {/* Assuming property type/bedrooms are not in current schema, add if needed */}
+                      <Badge variant="outline">Property</Badge>
+                      <Badge variant="outline">2 BR</Badge>
                     </div>
 
                     <div className="flex gap-2">
@@ -257,7 +280,7 @@ export function MapSection() {
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation()
-                          window.open(`tel:${property.landlord.phone}`, "_self")
+                          window.open(`tel:${property.landlord?.phone || property.landlord?.email}`, "_self") // Use phone or email
                         }}
                       >
                         <Phone className="h-3 w-3" />
@@ -279,7 +302,8 @@ export function MapSection() {
                 <strong>{selectedProperty.title}</strong> - {selectedProperty.location}
               </p>
               <p className="text-sm text-blue-700">
-                Contact: {selectedProperty.landlord.name} at {selectedProperty.landlord.phone}
+                Contact: {selectedProperty.landlord?.name || "N/A"} at{" "}
+                {selectedProperty.landlord?.phone || selectedProperty.landlord?.email || "N/A"}
               </p>
             </CardContent>
           </Card>
