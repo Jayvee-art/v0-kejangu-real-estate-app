@@ -4,6 +4,28 @@ import { Listing } from "@/lib/models"
 import { verifyToken } from "@/lib/auth"
 import mongoose from "mongoose"
 
+// GET single listing by ID
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    await connectDB()
+
+    if (!mongoose.Types.ObjectId.isValid(params.id)) {
+      return NextResponse.json({ message: "Invalid listing ID format" }, { status: 400 })
+    }
+
+    const listing = await Listing.findById(params.id).populate("landlord", "name email")
+
+    if (!listing) {
+      return NextResponse.json({ message: "Listing not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(listing)
+  } catch (error) {
+    console.error("Error fetching listing:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+  }
+}
+
 // PUT update listing
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {

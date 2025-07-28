@@ -1,17 +1,16 @@
+import type { DefaultSession } from "next-auth"
+
 declare module "next-auth" {
   interface Session {
     user: {
       id: string
-      email: string
-      name: string
       role: string
-    }
+    } & DefaultSession["user"]
+    token?: string // Add token to session if you're passing it from JWT
   }
 
   interface User {
     id: string
-    email: string
-    name: string
     role: string
   }
 }

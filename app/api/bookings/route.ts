@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (overlappingBookings.length > 0) {
-      return NextResponse.json({ message: "Property is not available for the selected dates" }, { status: 409 })
+      return NextResponse.json({ message: "Property is not available for the selected dates." }, { status: 409 })
     }
 
     const newBooking = new Booking({

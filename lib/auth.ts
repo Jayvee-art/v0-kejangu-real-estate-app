@@ -1,166 +1,153 @@
-import type { NextAuthOptions } from "next-auth"
+import type { NextRequest } from "next/server"
+import jwt from "jsonwebtoken"
+import { User } from "@/lib/models"
+import { connectDB } from "@/lib/mongodb"
+import CredentialsProvider from "next-auth/providers/credentials"
 import GoogleProvider from "next-auth/providers/google"
 import FacebookProvider from "next-auth/providers/facebook"
-import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
-import { connectDB } from "@/lib/mongodb"
-import { User } from "@/lib/models"
-import jwt from "jsonwebtoken"
-import type { NextRequest } from "next/server"
+import type { NextAuthOptions } from "next-auth"
 
-// Generate a fallback secret for development
-const generateFallbackSecret = () => {
-  if (typeof window === "undefined") {
-    // Server-side only
-    const crypto = require("crypto")
-    return crypto.randomBytes(32).toString("hex")
-  }
-  return "fallback-secret-for-development-only"
-}
-
-const secret = process.env.NEXTAUTH_SECRET || generateFallbackSecret()
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-jwt-secret-for-development-only"
 
-interface DecodedToken {
-  userId: string
-  email: string
-  role: string
-  iat: number
-  exp: number
-}
+// Centralized token verification function
+export async function verifyToken(request: NextRequest) {
+  const authHeader = request.headers.get("Authorization")
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null
 
-export async function verifyToken(req: NextRequest) {
-  const authHeader = req.headers.get("authorization")
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return { status: 401, message: "Unauthorized: No token provided or invalid format" }
+  if (!token) {
+    return { status: 401, message: "Authentication required: No token provided." }
   }
 
-  const token = authHeader.split(" ")[1]
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken
-    await connectDB() // Ensure DB connection for user lookup
-    const user = await User.findById(decoded.userId).select("-password") // Fetch user to ensure they exist and get full details
-
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string; role: string }
+    await connectDB()
+    const user = await User.findById(decoded.userId).select("-password") // Exclude password
     if (!user) {
-      return { status: 404, message: "Unauthorized: User not found" }
+      return { status: 404, message: "User not found." }
     }
-
-    // Return the full user object from DB, not just decoded token
-    return { status: 200, user: user.toObject() }
-  } catch (error) {
+    return { status: 200, message: "Authorized", user: user.toObject() }
+  } catch (error: any) {
+    if (error.name === "TokenExpiredError") {
+      return { status: 401, message: "Authentication failed: Token expired." }
+    }
+    if (error.name === "JsonWebTokenError") {
+      return { status: 401, message: "Authentication failed: Invalid token." }
+    }
     console.error("Token verification error:", error)
-    if (error instanceof jwt.JsonWebTokenError) {
-      return { status: 401, message: "Unauthorized: Invalid or expired token" }
-    }
-    return { status: 500, message: "Internal server error during token verification" }
+    return { status: 500, message: "Internal server error during authentication." }
   }
 }
 
 export const authOptions: NextAuthOptions = {
-  secret,
   providers: [
-    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          }),
-        ]
-      : []),
-    ...(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET
-      ? [
-          FacebookProvider({
-            clientId: process.env.FACEBOOK_CLIENT_ID,
-            clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-          }),
-        ]
-      : []),
     CredentialsProvider({
-      name: "credentials",
+      name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          return null
+          throw new Error("Email and password are required")
         }
 
-        try {
-          await connectDB()
-          const user = await User.findOne({ email: credentials.email.toLowerCase() })
+        await connectDB()
+        const user = await User.findOne({ email: credentials.email.toLowerCase() })
 
-          if (!user || !user.password) {
-            return null
-          }
+        if (!user || !user.password) {
+          throw new Error("Invalid credentials")
+        }
 
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
 
-          if (!isPasswordValid) {
-            return null
-          }
+        if (!isPasswordValid) {
+          throw new Error("Invalid credentials")
+        }
 
-          return {
-            id: user._id.toString(),
-            email: user.email,
-            name: user.name,
-            role: user.role,
-          }
-        } catch (error) {
-          console.error("Auth error:", error)
-          return null
+        // Return user object with necessary fields for JWT
+        return {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
         }
       },
     }),
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID as string,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
+    }),
+    FacebookProvider({
+      clientId: process.env.FACEBOOK_CLIENT_ID as string,
+      clientSecret: process.env.FACEBOOK_CLIENT_SECRET as string,
+    }),
   ],
+  pages: {
+    signIn: "/auth/login",
+    error: "/auth/login", // Redirect to login page on error
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  },
+  jwt: {
+    secret: process.env.NEXTAUTH_SECRET,
+  },
   callbacks: {
-    async signIn({ user, account, profile }) {
-      if (account?.provider === "google" || account?.provider === "facebook") {
-        try {
-          await connectDB()
-
-          const existingUser = await User.findOne({ email: user.email?.toLowerCase() })
-
-          if (!existingUser) {
-            // Create new user for OAuth
-            await User.create({
-              name: user.name,
-              email: user.email?.toLowerCase(),
-              role: "tenant", // Default role for OAuth users
-              authProvider: account.provider,
-              authProviderId: account.providerAccountId,
-            })
-          }
-
-          return true
-        } catch (error) {
-          console.error("OAuth sign in error:", error)
-          return false
-        }
-      }
-      return true
-    },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
-        token.role = user.role
+        token.id = user.id
+        token.role = (user as any).role // Cast user to any to access role
+      }
+      if (account && account.provider !== "credentials") {
+        await connectDB()
+        let existingUser = await User.findOne({
+          email: token.email?.toLowerCase(),
+          authProvider: account.provider,
+        })
+
+        if (!existingUser) {
+          // If user doesn't exist with this provider, create them
+          existingUser = await User.create({
+            name: token.name,
+            email: token.email?.toLowerCase(),
+            authProvider: account.provider,
+            authProviderId: account.providerAccountId,
+            emailVerified: true, // Assume verified for OAuth
+            isActive: true,
+            role: "tenant", // Default role for new OAuth users
+          })
+        } else if (existingUser.authProvider !== account.provider) {
+          // Handle case where email exists but with a different provider
+          // This might require linking accounts or showing an error
+          console.warn(`User with email ${token.email} already exists with provider ${existingUser.authProvider}`)
+          // You might want to throw an error here or redirect to a linking page
+        }
+
+        token.id = existingUser._id.toString()
+        token.role = existingUser.role
       }
       return token
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id = token.sub!
+        session.user.id = token.id as string
         session.user.role = token.role as string
       }
       return session
     },
+    async redirect({ url, baseUrl }) {
+      // Always redirect to the dashboard after successful login
+      return `${baseUrl}/dashboard`
+    },
   },
-  pages: {
-    signIn: "/auth/login",
-    signUp: "/auth/register",
-  },
-  session: {
-    strategy: "jwt",
-  },
-  debug: process.env.NODE_ENV === "development",
+  secret: process.env.NEXTAUTH_SECRET,
 }

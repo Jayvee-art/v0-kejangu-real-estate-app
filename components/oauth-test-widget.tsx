@@ -3,42 +3,59 @@
 import { signIn, signOut, useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
+import { useState } from "react"
 
 export function OAuthTestWidget() {
   const { data: session, status } = useSession()
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSignIn = async (provider: string) => {
+    setIsLoading(true)
+    await signIn(provider)
+    setIsLoading(false)
+  }
+
+  const handleSignOut = async () => {
+    setIsLoading(true)
+    await signOut()
+    setIsLoading(false)
+  }
 
   if (status === "loading") {
     return (
-      <div className="flex items-center justify-center p-4">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600">Loading authentication status...</span>
+      <div className="flex items-center space-x-2">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Loading session...</span>
+      </div>
+    )
+  }
+
+  if (session) {
+    return (
+      <div className="flex items-center space-x-2">
+        <span className="text-sm">Signed in as {session.user?.email}</span>
+        <Button onClick={handleSignOut} disabled={isLoading} size="sm">
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Sign out
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      {session ? (
-        <div className="text-center">
-          <p className="text-lg font-semibold">Logged in as: {session.user?.name || session.user?.email}</p>
-          <p className="text-sm text-gray-600">Role: {session.user?.role}</p>
-          <Button onClick={() => signOut()} className="mt-4">
-            Sign out
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <Button onClick={() => signIn("google")} className="w-full">
-            Sign in with Google
-          </Button>
-          <Button onClick={() => signIn("facebook")} className="w-full" variant="outline">
-            Sign in with Facebook
-          </Button>
-          <Button onClick={() => signIn("credentials")} className="w-full" variant="secondary">
-            Sign in with Credentials
-          </Button>
-        </div>
-      )}
+    <div className="flex items-center space-x-2">
+      <Button onClick={() => handleSignIn("google")} disabled={isLoading} size="sm">
+        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        Sign in with Google
+      </Button>
+      <Button onClick={() => handleSignIn("facebook")} disabled={isLoading} size="sm">
+        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        Sign in with Facebook
+      </Button>
+      <Button onClick={() => handleSignIn("credentials")} disabled={isLoading} size="sm">
+        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        Sign in with Credentials
+      </Button>
     </div>
   )
 }

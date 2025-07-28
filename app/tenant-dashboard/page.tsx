@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/components/auth-provider"
+import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Building2, CalendarCheck, LogOut, MapPin, MessageSquare, UserIcon } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
-import { useToast } from "@/hooks/use-toast"
+import { Building2, CalendarCheck, MessageSquare, LogOut, UserIcon, Loader2, MapPin } from "lucide-react"
 import Image from "next/image"
 import { format } from "date-fns"
 import Link from "next/link"
@@ -36,25 +36,29 @@ interface Booking {
 export default function TenantDashboardPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { user, logout } = useAuth()
+  const { user, logout, loading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
-    if (!user) {
-      router.push("/auth/login")
-      return
+    if (!loading) {
+      if (!user) {
+        router.push("/auth/login")
+      } else if (user.role !== "tenant") {
+        toast({
+          title: "Access Denied",
+          description: "You do not have permission to view this page.",
+          variant: "destructive",
+        })
+        router.push("/")
+      } else {
+        fetchMyBookings()
+      }
     }
-
-    if (user.role !== "tenant") {
-      router.push("/listings") // Redirect non-tenants
-      return
-    }
-
-    fetchMyBookings()
-  }, [user, router])
+  }, [user, loading, router, toast])
 
   const fetchMyBookings = async () => {
+    setIsLoading(true)
     try {
       const token = localStorage.getItem("token")
       const response = await fetch("/api/bookings/my-bookings", {
@@ -70,20 +74,25 @@ export default function TenantDashboardPage() {
         const errorData = await response.json()
         toast({
           title: "Error",
-          description: errorData.message || "Failed to fetch bookings",
+          description: errorData.message || "Failed to fetch your bookings",
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Error fetching bookings:", error)
+      console.error("Error fetching tenant bookings:", error)
       toast({
         title: "Error",
-        description: "Something went wrong while fetching your bookings.",
+        description: "Something went wrong while fetching bookings.",
         variant: "destructive",
       })
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
   }
 
   const getStatusBadgeVariant = (status: Booking["status"]) => {
@@ -101,13 +110,13 @@ export default function TenantDashboardPage() {
     }
   }
 
-  const handleLogout = () => {
-    logout()
-    router.push("/")
-  }
-
-  if (!user || user.role !== "tenant") {
-    return null
+  if (loading || !user || user.role !== "tenant") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading tenant dashboard...</span>
+      </div>
+    )
   }
 
   return (
@@ -116,12 +125,11 @@ export default function TenantDashboardPage() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
-            <Link href="/" className="flex items-center">
+            <div className="flex items-center">
               <Building2 className="h-8 w-8 text-blue-600" />
               <span className="ml-2 text-2xl font-bold text-gray-900">Kejangu</span>
-            </Link>
+            </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Welcome, {user.name}</span>
               <Link href={`/profile/${user.id}`}>
                 <Button variant="outline" size="sm">
                   <UserIcon className="h-4 w-4 mr-2" />
@@ -144,43 +152,16 @@ export default function TenantDashboardPage() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
-            <p className="text-gray-600">View and manage your property reservations</p>
+            <p className="text-gray-600">View and manage your property bookings</p>
           </div>
           <Link href="/listings">
-            <Button>
-              <Building2 className="h-4 w-4 mr-2" />
-              Browse Properties
-            </Button>
+            <Button>Browse More Properties</Button>
           </Link>
         </div>
 
-        {/* Stats */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-2xl">{bookings.length}</CardTitle>
-              <CardDescription>Total Bookings</CardDescription>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-2xl">{bookings.filter((b) => b.status === "pending").length}</CardTitle>
-              <CardDescription>Pending Bookings</CardDescription>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-2xl">{bookings.filter((b) => b.status === "confirmed").length}</CardTitle>
-              <CardDescription>Confirmed Bookings</CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-
-        {/* Bookings List */}
         {isLoading ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(3)].map((_, i) => (
@@ -201,12 +182,9 @@ export default function TenantDashboardPage() {
           <div className="text-center py-12">
             <CalendarCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings yet</h3>
-            <p className="text-gray-600 mb-4">Start exploring properties and make your first reservation!</p>
+            <p className="text-gray-600 mb-4">Start exploring properties and make your first booking!</p>
             <Link href="/listings">
-              <Button>
-                <Building2 className="h-4 w-4 mr-2" />
-                Browse Properties
-              </Button>
+              <Button>Browse Properties</Button>
             </Link>
           </div>
         ) : (
@@ -251,7 +229,7 @@ export default function TenantDashboardPage() {
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Landlord:</span>{" "}
                       <Link href={`/profile/${booking.landlord._id}`} className="text-blue-600 hover:underline">
-                        {booking.landlord.name}
+                        {booking.landlord.name} ({booking.landlord.email})
                       </Link>
                     </p>
                   </div>
@@ -261,7 +239,14 @@ export default function TenantDashboardPage() {
                         View Property
                       </Button>
                     </Link>
-                    {/* Add more actions like "Cancel Booking" if needed */}
+                    <Link
+                      href={`/messages?conversationWith=${booking.landlord._id}&propertyId=${booking.property._id}`}
+                    >
+                      <Button size="sm" className="flex-1">
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Message Landlord
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

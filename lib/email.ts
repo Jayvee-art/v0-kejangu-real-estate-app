@@ -18,22 +18,17 @@ const transporter = nodemailer.createTransport({
 
 export async function sendEmail({ to, subject, html }: EmailOptions) {
   try {
-    if (!process.env.EMAIL_FROM || !process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn("Email environment variables are not fully configured. Skipping email sending.")
-      return { success: false, message: "Email service not configured." }
-    }
-
-    const info = await transporter.sendMail({
+    const mailOptions = {
       from: process.env.EMAIL_FROM,
       to,
       subject,
       html,
-    })
+    }
 
-    console.log("Message sent: %s", info.messageId)
-    return { success: true, message: "Email sent successfully." }
+    await transporter.sendMail(mailOptions)
+    console.log(`Email sent to ${to} with subject: ${subject}`)
   } catch (error) {
-    console.error("Error sending email:", error)
-    return { success: false, message: "Failed to send email." }
+    console.error(`Error sending email to ${to}:`, error)
+    throw new Error("Failed to send email notification.")
   }
 }

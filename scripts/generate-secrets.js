@@ -1,36 +1,49 @@
 const crypto = require("crypto")
+const fs = require("fs")
+const path = require("path")
 
-/**
- * Generate secure secrets for production use
- * Run: node scripts/generate-secrets.js
- */
-function generateSecret(length = 32) {
-  return crypto.randomBytes(length).toString("hex")
-}
+const envPath = path.resolve(process.cwd(), ".env.local")
 
-function generateSecrets() {
-  const jwtSecret = generateSecret(32)
-  const nextAuthSecret = generateSecret(32)
+// Function to generate a random hex string
+const generateRandomHex = (length) => crypto.randomBytes(length).toString("hex")
 
-  console.log("🔐 Generated Secure Secrets:")
-  console.log("=".repeat(50))
-  console.log(`JWT_SECRET=${jwtSecret}`)
-  console.log(`NEXTAUTH_SECRET=${nextAuthSecret}`)
-  console.log("=".repeat(50))
-  console.log("⚠️  IMPORTANT: Copy these secrets to your .env.local file and Vercel environment variables")
-  console.log("🔒 Keep these secrets secure and never commit them to version control")
-  console.log("")
-  console.log("📋 For Vercel deployment:")
-  console.log("1. Go to your Vercel project dashboard")
-  console.log("2. Navigate to Settings > Environment Variables")
-  console.log("3. Add both JWT_SECRET and NEXTAUTH_SECRET")
-  console.log("4. Redeploy your application")
-
-  return {
-    jwtSecret,
-    nextAuthSecret,
+// Function to update or add an environment variable in .env.local
+const updateEnvFile = (key, value) => {
+  let envContent = ""
+  if (fs.existsSync(envPath)) {
+    envContent = fs.readFileSync(envPath, "utf8")
   }
+
+  const lines = envContent.split("\n")
+  let updated = false
+  const newLines = lines.map((line) => {
+    if (line.startsWith(`${key}=`)) {
+      updated = true
+      return `${key}=${value}`
+    }
+    return line
+  })
+
+  if (!updated) {
+    newLines.push(`${key}=${value}`)
+  }
+
+  fs.writeFileSync(envPath, newLines.join("\n"))
+  console.log(`Updated/Added ${key} in .env.local`)
 }
 
-// Generate secrets
+const generateSecrets = () => {
+  console.log("Generating secrets for .env.local...")
+
+  // Generate NEXTAUTH_SECRET
+  const nextAuthSecret = generateRandomHex(32)
+  updateEnvFile("NEXTAUTH_SECRET", nextAuthSecret)
+
+  // Generate JWT_SECRET
+  const jwtSecret = generateRandomHex(32)
+  updateEnvFile("JWT_SECRET", jwtSecret)
+
+  console.log("Secrets generation complete. Check your .env.local file.")
+}
+
 generateSecrets()

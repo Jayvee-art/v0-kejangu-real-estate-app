@@ -2,169 +2,268 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Building2, Users, Mail, Phone, Save, TrendingUp, MapPin, Shield } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Loader2, UserIcon, Building2, MessageSquare, LogOut, Plus, Trash2 } from "lucide-react"
+import Link from "next/link"
+import { format } from "date-fns"
 
-interface SiteSettings {
-  siteName: string
-  contactEmail: string
-  contactPhone: string
-  supportEmail: string
-  address: string
-  description: string
-  socialMedia: {
-    facebook: string
-    twitter: string
-    instagram: string
-    linkedin: string
+interface User {
+  _id: string
+  name: string
+  email: string
+  role: "landlord" | "tenant" | "admin"
+  isActive: boolean
+  createdAt: string
+}
+
+interface Listing {
+  _id: string
+  title: string
+  location: string
+  price: number
+  landlord: {
+    _id: string
+    name: string
+    email: string
   }
+  createdAt: string
 }
 
-interface DashboardStats {
-  totalUsers: number
-  totalListings: number
-  totalLandlords: number
-  totalTenants: number
-  recentActivity: Array<{
-    id: string
-    type: string
-    message: string
-    timestamp: string
-  }>
+interface Booking {
+  _id: string
+  property: {
+    _id: string
+    title: string
+    location: string
+  }
+  tenant: {
+    _id: string
+    name: string
+    email: string
+  }
+  landlord: {
+    _id: string
+    name: string
+    email: string
+  }
+  startDate: string
+  endDate: string
+  totalPrice: number
+  status: "pending" | "confirmed" | "cancelled" | "completed"
+  createdAt: string
 }
 
-export default function AdminPage() {
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>({
-    siteName: "Kejangu",
-    contactEmail: "info@kejangu.com",
-    contactPhone: "+254 700 000 000",
-    supportEmail: "support@kejangu.com",
-    address: "Nairobi, Kenya",
-    description: "Connecting landlords and tenants across Kenya",
-    socialMedia: {
-      facebook: "https://facebook.com/kejangu",
-      twitter: "https://twitter.com/kejangu",
-      instagram: "https://instagram.com/kejangu",
-      linkedin: "https://linkedin.com/company/kejangu",
-    },
-  })
-
-  const [stats, setStats] = useState<DashboardStats>({
-    totalUsers: 0,
-    totalListings: 0,
-    totalLandlords: 0,
-    totalTenants: 0,
-    recentActivity: [],
-  })
-
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const { user } = useAuth()
+export default function AdminDashboardPage() {
+  const { user, loading, logout } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
+  const [users, setUsers] = useState<User[]>([])
+  const [listings, setListings] = useState<Listing[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true)
+  const [isLoadingListings, setIsLoadingListings] = useState(true)
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true)
+
   useEffect(() => {
-    // Check if user is admin (you can implement proper admin role checking)
-    if (!user || user.email !== "admin@kejangu.com") {
-      router.push("/auth/login")
-      return
+    if (!loading) {
+      if (!user || user.role !== "admin") {
+        toast({
+          title: "Access Denied",
+          description: "You do not have permission to view this page.",
+          variant: "destructive",
+        })
+        router.push("/")
+      } else {
+        fetchAllUsers()
+        fetchAllListings()
+        fetchAllBookings()
+      }
     }
+  }, [user, loading, router, toast])
 
-    fetchDashboardData()
-    fetchSiteSettings()
-  }, [user, router])
-
-  const fetchDashboardData = async () => {
-    setIsLoading(true)
+  const fetchAllUsers = async () => {
+    setIsLoadingUsers(true)
     try {
-      // Mock data - replace with actual API calls
-      setStats({
-        totalUsers: 2547,
-        totalListings: 523,
-        totalLandlords: 234,
-        totalTenants: 2313,
-        recentActivity: [
-          {
-            id: "1",
-            type: "user_registration",
-            message: "New user John Doe registered as tenant",
-            timestamp: "2 minutes ago",
-          },
-          {
-            id: "2",
-            type: "listing_created",
-            message: "New property listed in Westlands",
-            timestamp: "5 minutes ago",
-          },
-          {
-            id: "3",
-            type: "contact_made",
-            message: "Tenant contacted landlord about property in Karen",
-            timestamp: "10 minutes ago",
-          },
-          {
-            id: "4",
-            type: "user_registration",
-            message: "New landlord Sarah Wilson joined",
-            timestamp: "15 minutes ago",
-          },
-        ],
+      const token = localStorage.getItem("token")
+      const response = await fetch("/api/admin/users", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       })
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data)
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.message || "Failed to fetch users.",
+          variant: "destructive",
+        })
+      }
     } catch (error) {
-      console.error("Error fetching dashboard data:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const fetchSiteSettings = async () => {
-    try {
-      // Mock data - replace with actual API call
-      // const response = await fetch("/api/admin/settings")
-      // const data = await response.json()
-      // setSiteSettings(data)
-    } catch (error) {
-      console.error("Error fetching site settings:", error)
-    }
-  }
-
-  const handleSaveSettings = async () => {
-    setIsSaving(true)
-    try {
-      // Mock save - replace with actual API call
-      // const response = await fetch("/api/admin/settings", {
-      //   method: "PUT",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(siteSettings)
-      // })
-
-      await new Promise((resolve) => setTimeout(resolve, 1000)) // Mock delay
-
+      console.error("Error fetching users:", error)
       toast({
-        title: "Settings saved successfully",
-        description: "Site settings have been updated",
-      })
-    } catch (error) {
-      toast({
-        title: "Error saving settings",
-        description: "Please try again",
+        title: "Network Error",
+        description: "Unable to connect to server to fetch users.",
         variant: "destructive",
       })
     } finally {
-      setIsSaving(false)
+      setIsLoadingUsers(false)
     }
   }
 
-  if (!user || user.email !== "admin@kejangu.com") {
-    return null
+  const fetchAllListings = async () => {
+    setIsLoadingListings(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch("/api/admin/listings", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setListings(data)
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.message || "Failed to fetch listings.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching listings:", error)
+      toast({
+        title: "Network Error",
+        description: "Unable to connect to server to fetch listings.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingListings(false)
+    }
+  }
+
+  const fetchAllBookings = async () => {
+    setIsLoadingBookings(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch("/api/admin/bookings", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setBookings(data)
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.message || "Failed to fetch bookings.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching bookings:", error)
+      toast({
+        title: "Network Error",
+        description: "Unable to connect to server to fetch bookings.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingBookings(false)
+    }
+  }
+
+  const handleDeleteUser = async (userIdToDelete: string) => {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`/api/users/${userIdToDelete}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (response.ok) {
+        toast({
+          title: "User Deleted",
+          description: "User account has been successfully removed.",
+        })
+        fetchAllUsers() // Refresh user list
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Deletion Failed",
+          description: errorData.message || "Failed to delete user.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      toast({
+        title: "Network Error",
+        description: "Unable to connect to server to delete user.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteListing = async (listingId: string) => {
+    if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      if (response.ok) {
+        toast({
+          title: "Listing Deleted",
+          description: "Property listing has been successfully removed.",
+        })
+        fetchAllListings() // Refresh listing list
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Deletion Failed",
+          description: errorData.message || "Failed to delete listing.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting listing:", error)
+      toast({
+        title: "Network Error",
+        description: "Unable to connect to server to delete listing.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleLogout = () => {
+    logout()
+    router.push("/")
+  }
+
+  if (loading || !user || user.role !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading admin dashboard...</span>
+      </div>
+    )
   }
 
   return (
@@ -178,267 +277,170 @@ export default function AdminPage() {
               <span className="ml-2 text-2xl font-bold text-gray-900">Kejangu Admin</span>
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="secondary">Admin Panel</Badge>
-              <span className="text-sm text-gray-600">Welcome, {user.name}</span>
+              <Link href={`/profile/${user.id}`}>
+                <Button variant="outline" size="sm">
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  My Profile
+                </Button>
+              </Link>
+              <Link href="/messages">
+                <Button variant="outline" size="sm">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Messages
+                </Button>
+              </Link>
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="dashboard" className="space-y-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Admin Dashboard</h1>
+
+        <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="settings">Site Settings</TabsTrigger>
-            <TabsTrigger value="users">User Management</TabsTrigger>
+            <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="listings">Listings</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
           </TabsList>
 
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalUsers.toLocaleString()}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />
-                    +12% from last month
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Listings</CardTitle>
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalListings}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />
-                    +8% from last month
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Landlords</CardTitle>
-                  <Shield className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalLandlords}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />
-                    +15% from last month
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Tenants</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalTenants}</div>
-                  <p className="text-xs text-muted-foreground">
-                    <TrendingUp className="h-3 w-3 inline mr-1" />
-                    +10% from last month
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Recent Activity */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest platform activities and user interactions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {stats.recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-center space-x-4">
-                      <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm">{activity.message}</p>
-                        <p className="text-xs text-gray-500">{activity.timestamp}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Site Settings Tab */}
-          <TabsContent value="settings" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Site Settings</CardTitle>
-                <CardDescription>Manage your site's contact information and settings</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="siteName">Site Name</Label>
-                    <Input
-                      id="siteName"
-                      value={siteSettings.siteName}
-                      onChange={(e) => setSiteSettings({ ...siteSettings, siteName: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="contactEmail">
-                      <Mail className="h-4 w-4 inline mr-1" />
-                      Contact Email
-                    </Label>
-                    <Input
-                      id="contactEmail"
-                      type="email"
-                      value={siteSettings.contactEmail}
-                      onChange={(e) => setSiteSettings({ ...siteSettings, contactEmail: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="contactPhone">
-                      <Phone className="h-4 w-4 inline mr-1" />
-                      Contact Phone
-                    </Label>
-                    <Input
-                      id="contactPhone"
-                      value={siteSettings.contactPhone}
-                      onChange={(e) => setSiteSettings({ ...siteSettings, contactPhone: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="supportEmail">
-                      <Mail className="h-4 w-4 inline mr-1" />
-                      Support Email
-                    </Label>
-                    <Input
-                      id="supportEmail"
-                      type="email"
-                      value={siteSettings.supportEmail}
-                      onChange={(e) => setSiteSettings({ ...siteSettings, supportEmail: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">
-                    <MapPin className="h-4 w-4 inline mr-1" />
-                    Address
-                  </Label>
-                  <Input
-                    id="address"
-                    value={siteSettings.address}
-                    onChange={(e) => setSiteSettings({ ...siteSettings, address: e.target.value })}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Site Description</Label>
-                  <Textarea
-                    id="description"
-                    value={siteSettings.description}
-                    onChange={(e) => setSiteSettings({ ...siteSettings, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                {/* Social Media Links */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Social Media Links</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="facebook">Facebook</Label>
-                      <Input
-                        id="facebook"
-                        value={siteSettings.socialMedia.facebook}
-                        onChange={(e) =>
-                          setSiteSettings({
-                            ...siteSettings,
-                            socialMedia: { ...siteSettings.socialMedia, facebook: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="twitter">Twitter</Label>
-                      <Input
-                        id="twitter"
-                        value={siteSettings.socialMedia.twitter}
-                        onChange={(e) =>
-                          setSiteSettings({
-                            ...siteSettings,
-                            socialMedia: { ...siteSettings.socialMedia, twitter: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="instagram">Instagram</Label>
-                      <Input
-                        id="instagram"
-                        value={siteSettings.socialMedia.instagram}
-                        onChange={(e) =>
-                          setSiteSettings({
-                            ...siteSettings,
-                            socialMedia: { ...siteSettings.socialMedia, instagram: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="linkedin">LinkedIn</Label>
-                      <Input
-                        id="linkedin"
-                        value={siteSettings.socialMedia.linkedin}
-                        onChange={(e) =>
-                          setSiteSettings({
-                            ...siteSettings,
-                            socialMedia: { ...siteSettings.socialMedia, linkedin: e.target.value },
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={handleSaveSettings} disabled={isSaving}>
-                    <Save className="h-4 w-4 mr-2" />
-                    {isSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* User Management Tab */}
+          {/* Users Tab */}
           <TabsContent value="users" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>View and manage platform users</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">User Management</h3>
-                  <p className="text-gray-600">User management features coming soon...</p>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">All Users</h2>
+              <Button onClick={() => router.push("/auth/register")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add New User
+              </Button>
+            </div>
+            {isLoadingUsers ? (
+              <div className="flex items-center justify-center p-6">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading users...</span>
+              </div>
+            ) : users.length === 0 ? (
+              <p className="text-center text-gray-500">No users found.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {users.map((u) => (
+                  <Card key={u._id}>
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-lg">
+                          <Link href={`/profile/${u._id}`} className="hover:underline">
+                            {u.name}
+                          </Link>
+                        </h3>
+                        <p className="text-sm text-gray-600">{u.email}</p>
+                        <p className="text-sm text-gray-500 capitalize">Role: {u.role}</p>
+                        <p className="text-sm text-gray-500">Status: {u.isActive ? "Active" : "Inactive"}</p>
+                        <p className="text-xs text-gray-400">Joined: {format(new Date(u.createdAt), "PPP")}</p>
+                      </div>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteUser(u._id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Listings Tab */}
+          <TabsContent value="listings" className="space-y-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">All Listings</h2>
+              <Button onClick={() => router.push("/listings")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add New Listing
+              </Button>
+            </div>
+            {isLoadingListings ? (
+              <div className="flex items-center justify-center p-6">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading listings...</span>
+              </div>
+            ) : listings.length === 0 ? (
+              <p className="text-center text-gray-500">No listings found.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {listings.map((l) => (
+                  <Card key={l._id}>
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold text-lg">
+                          <Link href={`/listings/${l._id}`} className="hover:underline">
+                            {l.title}
+                          </Link>
+                        </h3>
+                        <p className="text-sm text-gray-600">Location: {l.location}</p>
+                        <p className="text-sm text-gray-500">Price: KSh {l.price.toLocaleString()}/month</p>
+                        <p className="text-sm text-gray-500">
+                          Landlord:{" "}
+                          <Link href={`/profile/${l.landlord._id}`} className="text-blue-600 hover:underline">
+                            {l.landlord.name}
+                          </Link>
+                        </p>
+                        <p className="text-xs text-gray-400">Created: {format(new Date(l.createdAt), "PPP")}</p>
+                      </div>
+                      <Button variant="destructive" size="sm" onClick={() => handleDeleteListing(l._id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Bookings Tab */}
+          <TabsContent value="bookings" className="space-y-6">
+            <h2 className="text-2xl font-bold mb-4">All Bookings</h2>
+            {isLoadingBookings ? (
+              <div className="flex items-center justify-center p-6">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading bookings...</span>
+              </div>
+            ) : bookings.length === 0 ? (
+              <p className="text-center text-gray-500">No bookings found.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {bookings.map((b) => (
+                  <Card key={b._id}>
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-lg">
+                        Property:{" "}
+                        <Link href={`/listings/${b.property._id}`} className="hover:underline">
+                          {b.property.title}
+                        </Link>
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Tenant:{" "}
+                        <Link href={`/profile/${b.tenant._id}`} className="text-blue-600 hover:underline">
+                          {b.tenant.name} ({b.tenant.email})
+                        </Link>
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Landlord:{" "}
+                        <Link href={`/profile/${b.landlord._id}`} className="text-blue-600 hover:underline">
+                          {b.landlord.name} ({b.landlord.email})
+                        </Link>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Dates: {format(new Date(b.startDate), "PPP")} - {format(new Date(b.endDate), "PPP")}
+                      </p>
+                      <p className="text-sm text-gray-500">Total Price: KSh {b.totalPrice.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500 capitalize">Status: {b.status}</p>
+                      <p className="text-xs text-gray-400">Booked: {format(new Date(b.createdAt), "PPP")}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

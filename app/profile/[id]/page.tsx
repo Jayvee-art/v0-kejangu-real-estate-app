@@ -1,19 +1,21 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useParams } from "next/navigation"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Building2, Mail, Phone, MapPin, CalendarCheck, MessageSquare, Loader2 } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
+import { Loader2, UserIcon, Mail, MapPin, Building2, XCircle } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
-import { NewConversationDialog } from "@/components/chat/new-conversation-dialog"
-import { UserIcon } from "lucide-react" // Import UserIcon
 
 interface UserProfile {
   _id: string
@@ -22,7 +24,10 @@ interface UserProfile {
   role: "landlord" | "tenant" | "admin"
   country?: string
   phone?: string
+  subscribeToUpdates?: boolean
+  isActive?: boolean
   createdAt: string
+  updatedAt: string
 }
 
 interface Listing {
@@ -32,10 +37,7 @@ interface Listing {
   price: number
   location: string
   imageUrl?: string
-  landlord: {
-    _id: string
-    name: string
-  }
+  landlord: string // Only ID needed here
 }
 
 interface Booking {
@@ -44,8 +46,11 @@ interface Booking {
     _id: string
     title: string
     location: string
-    price: number
     imageUrl?: string
+  }
+  tenant: {
+    _id: string
+    name: string
   }
   landlord: {
     _id: string
@@ -58,382 +63,451 @@ interface Booking {
   createdAt: string
 }
 
-export default function UserProfilePage() {
-  const { id } = useParams()
+export default function ProfilePage() {
+  const params = useParams()
+  const userId = params.id as string
+  const { user: currentUser, loading: authLoading, refreshUser } = useAuth()
   const router = useRouter()
-  const { user: currentUser, isLoading: authLoading } = useAuth()
   const { toast } = useToast()
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [listings, setListings] = useState<Listing[]>([])
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
-  const [isLoadingContent, setIsLoadingContent] = useState(true)
-  const [showNewConversationDialog, setShowNewConversationDialog] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Form states
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [country, setCountry] = useState("")
+  const [phone, setPhone] = useState("")
+  const [subscribeToUpdates, setSubscribeToUpdates] = useState(false)
+
+  const [userListings, setUserListings] = useState<Listing[]>([])
+  const [userBookings, setUserBookings] = useState<Booking[]>([])
+  const [isLoadingListings, setIsLoadingListings] = useState(true)
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true)
+
+  const isMyProfile = currentUser?._id === userId || userId === "me"
 
   useEffect(() => {
     if (authLoading) return
 
-    if (!currentUser) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to view user profiles.",
-        variant: "destructive",
-      })
-      router.push("/auth/login")
-      return
+    const fetchProfile = async () => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch(`/api/users/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (response.ok) {
+          const data: UserProfile = await response.json()
+          setProfile(data)
+          setName(data.name)
+          setEmail(data.email)
+          setCountry(data.country || "")
+          setPhone(data.phone || "")
+          setSubscribeToUpdates(data.subscribeToUpdates || false)
+        } else {
+          const errorData = await response.json()
+          toast({
+            title: "Error",
+            description: errorData.message || "Failed to fetch user profile.",
+            variant: "destructive",
+          })
+          router.push("/") // Redirect if profile not found or unauthorized
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error)
+        toast({
+          title: "Network Error",
+          description: "Unable to connect to server to fetch profile.",
+          variant: "destructive",
+        })
+        router.push("/")
+      } finally {
+        setIsLoading(false)
+      }
     }
 
     fetchProfile()
-  }, [id, currentUser, authLoading, router, toast])
+  }, [userId, authLoading, router, toast, currentUser?._id])
 
-  const fetchProfile = async () => {
-    setIsLoadingProfile(true)
-    setIsLoadingContent(true)
-    try {
-      const token = localStorage.getItem("token")
-      const profileResponse = await fetch(`/api/users/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+  useEffect(() => {
+    if (!profile) return
 
-      if (profileResponse.ok) {
-        const profileData: UserProfile = await profileResponse.json()
-        setProfile(profileData)
-
-        if (profileData.role === "landlord") {
-          await fetchLandlordListings(profileData._id)
-        } else if (profileData.role === "tenant") {
-          await fetchTenantBookings(profileData._id)
+    const fetchUserListings = async () => {
+      if (profile.role !== "landlord") {
+        setIsLoadingListings(false)
+        return
+      }
+      setIsLoadingListings(true)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch("/api/listings/my-listings", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (response.ok) {
+          const data: Listing[] = await response.json()
+          setUserListings(data)
+        } else {
+          const errorData = await response.json()
+          toast({
+            title: "Error",
+            description: errorData.message || "Failed to fetch listings.",
+            variant: "destructive",
+          })
         }
-      } else {
-        const errorData = await profileResponse.json()
+      } catch (error) {
+        console.error("Error fetching user listings:", error)
         toast({
-          title: "Error",
-          description: errorData.message || "Failed to fetch user profile.",
+          title: "Network Error",
+          description: "Unable to connect to server to fetch listings.",
           variant: "destructive",
         })
-        setProfile(null)
+      } finally {
+        setIsLoadingListings(false)
+      }
+    }
+
+    const fetchUserBookings = async () => {
+      if (profile.role !== "tenant") {
+        setIsLoadingBookings(false)
+        return
+      }
+      setIsLoadingBookings(true)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch("/api/bookings/my-bookings", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (response.ok) {
+          const data: Booking[] = await response.json()
+          setUserBookings(data)
+        } else {
+          const errorData = await response.json()
+          toast({
+            title: "Error",
+            description: errorData.message || "Failed to fetch bookings.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching user bookings:", error)
+        toast({
+          title: "Network Error",
+          description: "Unable to connect to server to fetch bookings.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoadingBookings(false)
+      }
+    }
+
+    fetchUserListings()
+    fetchUserBookings()
+  }, [profile, toast])
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`/api/users/${profile?._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, email, country, phone, subscribeToUpdates }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setProfile(data) // Update local profile state
+        refreshUser() // Refresh user in AuthContext
+        toast({
+          title: "Profile Updated! 🎉",
+          description: "Your profile information has been saved.",
+        })
+        setIsEditing(false)
+      } else {
+        toast({
+          title: "Update Failed",
+          description: data.message || "Something went wrong during profile update.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("Error fetching profile:", error)
+      console.error("Profile update error:", error)
       toast({
-        title: "Error",
-        description: "Something went wrong while fetching the profile.",
+        title: "Network Error",
+        description: "Unable to connect to server. Please try again.",
         variant: "destructive",
       })
-      setProfile(null)
     } finally {
-      setIsLoadingProfile(false)
-      setIsLoadingContent(false)
+      setIsSaving(false)
     }
   }
 
-  const fetchLandlordListings = async (landlordId: string) => {
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`/api/listings/my-listings?userId=${landlordId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setListings(data)
-      } else {
-        const errorData = await response.json()
-        toast({
-          title: "Error",
-          description: errorData.message || "Failed to fetch listings.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching landlord listings:", error)
-    }
-  }
-
-  const fetchTenantBookings = async (tenantId: string) => {
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch(`/api/bookings/my-bookings?userId=${tenantId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setBookings(data)
-      } else {
-        const errorData = await response.json()
-        toast({
-          title: "Error",
-          description: errorData.message || "Failed to fetch bookings.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error fetching tenant bookings:", error)
-    }
-  }
-
-  const getStatusBadgeVariant = (status: Booking["status"]) => {
-    switch (status) {
-      case "confirmed":
-        return "default"
-      case "pending":
-        return "secondary"
-      case "cancelled":
-        return "destructive"
-      case "completed":
-        return "outline"
-      default:
-        return "secondary"
-    }
-  }
-
-  if (isLoadingProfile || authLoading) {
+  if (isLoading || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <p className="ml-3 text-lg text-gray-700">Loading profile...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading profile...</span>
       </div>
     )
   }
 
   if (!profile) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4 text-center">
-        <UserIcon className="h-16 w-16 text-gray-400 mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Profile Not Found</h1>
-        <p className="text-gray-600 mb-4">The user profile you are looking for does not exist or is inaccessible.</p>
-        <Button onClick={() => router.back()}>Go Back</Button>
+      <div className="flex min-h-screen items-center justify-center text-red-500">
+        <XCircle className="h-8 w-8 mr-2" />
+        <span>Profile not found or access denied.</span>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <Link href="/" className="flex items-center">
-              <Building2 className="h-8 w-8 text-blue-600" />
-              <span className="ml-2 text-2xl font-bold text-gray-900">Kejangu</span>
-            </Link>
-            <nav className="flex space-x-4">
-              {currentUser ? (
-                <>
-                  {currentUser.role === "landlord" && (
-                    <Button variant="outline" onClick={() => router.push("/dashboard")}>
-                      My Dashboard
-                    </Button>
-                  )}
-                  {currentUser.role === "tenant" && (
-                    <Button variant="outline" onClick={() => router.push("/tenant-dashboard")}>
-                      My Bookings
-                    </Button>
-                  )}
-                  <Button onClick={() => router.push("/listings")}>Browse Properties</Button>
-                </>
-              ) : (
-                <>
-                  <Link href="/auth/login">
-                    <Button variant="outline">Login</Button>
-                  </Link>
-                  <Link href="/auth/register">
-                    <Button>Get Started</Button>
-                  </Link>
-                </>
-              )}
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Card className="mb-8">
-          <CardContent className="p-6 flex flex-col md:flex-row items-center md:items-start gap-6">
-            <Avatar className="h-24 w-24 md:h-32 md:w-32">
-              <AvatarImage src={`/placeholder.svg?text=${profile.name.charAt(0)}`} />
-              <AvatarFallback className="text-5xl">{profile.name.charAt(0).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div className="text-center md:text-left flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-1">{profile.name}</h1>
-              <Badge variant="secondary" className="capitalize mb-3">
-                {profile.role}
-              </Badge>
-              <p className="text-gray-600 flex items-center justify-center md:justify-start gap-2 mb-2">
-                <Mail className="h-4 w-4" />
-                {profile.email}
-              </p>
-              {profile.phone && (
-                <p className="text-gray-600 flex items-center justify-center md:justify-start gap-2 mb-2">
-                  <Phone className="h-4 w-4" />
-                  {profile.phone}
-                </p>
-              )}
-              {profile.country && (
-                <p className="text-gray-600 flex items-center justify-center md:justify-start gap-2 mb-2">
-                  <MapPin className="h-4 w-4" />
-                  {profile.country}
-                </p>
-              )}
-              <p className="text-sm text-gray-500 mt-2">
-                Joined: {format(new Date(profile.createdAt), "MMM dd, yyyy")}
-              </p>
-              {currentUser && currentUser._id !== profile._id && (
-                <Button className="mt-4" onClick={() => setShowNewConversationDialog(true)}>
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Message {profile.name}
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {profile.role === "landlord" && (
-          <section className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Properties by {profile.name}</h2>
-            {isLoadingContent ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(3)].map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <div className="h-48 bg-gray-200 rounded-t-lg"></div>
-                    <CardHeader>
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                      <div className="h-8 bg-gray-200 rounded w-full"></div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : listings.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Building2 className="h-10 w-10 mx-auto mb-3" />
-                <p>No properties listed by this landlord yet.</p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {listings.map((listing) => (
-                  <Card key={listing._id} className="overflow-hidden">
-                    <div className="h-48 bg-gray-200 relative">
-                      {listing.imageUrl ? (
-                        <Image
-                          src={listing.imageUrl || "/placeholder.svg"}
-                          alt={listing.title}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <Building2 className="h-12 w-12 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                    <CardHeader>
-                      <CardTitle className="text-lg">{listing.title}</CardTitle>
-                      <CardDescription className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {listing.location}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">{listing.description}</p>
-                      <Badge variant="secondary" className="text-lg font-semibold">
-                        ${listing.price}/month
-                      </Badge>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {profile.role === "tenant" && (
-          <section className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Bookings by {profile.name}</h2>
-            {isLoadingContent ? (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(3)].map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <div className="h-48 bg-gray-200 rounded-t-lg"></div>
-                    <CardHeader>
-                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                      <div className="h-8 bg-gray-200 rounded w-full"></div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : bookings.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <CalendarCheck className="h-10 w-10 mx-auto mb-3" />
-                <p>No bookings made by this tenant yet.</p>
-              </div>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {bookings.map((booking) => (
-                  <Card key={booking._id} className="overflow-hidden">
-                    <div className="h-48 bg-gray-200 relative">
-                      {booking.property.imageUrl ? (
-                        <Image
-                          src={booking.property.imageUrl || "/placeholder.svg"}
-                          alt={booking.property.title}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <Building2 className="h-12 w-12 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="absolute top-2 right-2">
-                        <Badge variant={getStatusBadgeVariant(booking.status)} className="capitalize">
-                          {booking.status}
-                        </Badge>
-                      </div>
-                    </div>
-                    <CardHeader>
-                      <CardTitle className="text-lg">{booking.property.title}</CardTitle>
-                      <CardDescription className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {booking.property.location}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-gray-600">
-                        Dates: {format(new Date(booking.startDate), "MMM dd, yyyy")} -{" "}
-                        {format(new Date(booking.endDate), "MMM dd, yyyy")}
-                      </p>
-                      <p className="text-sm text-gray-600">Total: KSh {booking.totalPrice.toLocaleString()}</p>
-                      <p className="text-sm text-gray-600">Landlord: {booking.landlord.name}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </section>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col items-center justify-center mb-8">
+        <Avatar className="h-24 w-24 mb-4">
+          <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${profile.name}`} />
+          <AvatarFallback>
+            <UserIcon className="h-12 w-12" />
+          </AvatarFallback>
+        </Avatar>
+        <h1 className="text-3xl font-bold">{profile.name}</h1>
+        <p className="text-gray-500 dark:text-gray-400 capitalize">{profile.role}</p>
+        {profile.email && (
+          <p className="text-gray-600 dark:text-gray-300 flex items-center gap-1">
+            <Mail className="h-4 w-4" /> {profile.email}
+          </p>
         )}
       </div>
 
-      {currentUser && currentUser._id !== profile._id && (
-        <NewConversationDialog
-          open={showNewConversationDialog}
-          onOpenChange={setShowNewConversationDialog}
-          recipientId={profile._id}
-          recipientName={profile.name}
-        />
-      )}
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+          <TabsTrigger value="profile">Profile Details</TabsTrigger>
+          {profile.role === "landlord" && <TabsTrigger value="listings">My Listings</TabsTrigger>}
+          {profile.role === "tenant" && <TabsTrigger value="bookings">My Bookings</TabsTrigger>}
+        </TabsList>
+
+        <TabsContent value="profile" className="mt-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xl font-semibold">Personal Information</CardTitle>
+              {isMyProfile && (
+                <Button variant="outline" onClick={() => setIsEditing(!isEditing)} disabled={isSaving}>
+                  {isEditing ? "Cancel" : "Edit Profile"}
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!isEditing || isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={!isEditing || isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="e.g., Kenya"
+                    disabled={!isEditing || isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g., +2547XXXXXXXX"
+                    disabled={!isEditing || isSaving}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="subscribe"
+                  checked={subscribeToUpdates}
+                  onCheckedChange={(checked) => setSubscribeToUpdates(Boolean(checked))}
+                  disabled={!isEditing || isSaving}
+                />
+                <Label htmlFor="subscribe">Subscribe to updates</Label>
+              </div>
+              {isEditing && (
+                <Button onClick={handleSave} disabled={isSaving} className="w-full md:w-auto">
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {profile.role === "landlord" && (
+          <TabsContent value="listings" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold">My Property Listings</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {isLoadingListings ? (
+                  <div className="flex items-center justify-center p-6">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    <span>Loading listings...</span>
+                  </div>
+                ) : userListings.length === 0 ? (
+                  <p className="text-center text-gray-500">You have no active listings yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {userListings.map((listing) => (
+                      <Card key={listing._id} className="overflow-hidden">
+                        <div className="relative h-48 w-full bg-gray-200">
+                          {listing.imageUrl ? (
+                            <Image
+                              src={listing.imageUrl || "/placeholder.svg"}
+                              alt={listing.title}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full w-full text-gray-400">
+                              <Building2 className="h-12 w-12" />
+                            </div>
+                          )}
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-bold text-lg">{listing.title}</h3>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <MapPin className="h-4 w-4" /> {listing.location}
+                          </p>
+                          <p className="text-md font-semibold mt-2">KSh {listing.price.toLocaleString()}/month</p>
+                          <Link
+                            href={`/listings/${listing._id}`}
+                            className="text-blue-500 hover:underline text-sm mt-2 block"
+                          >
+                            View Details
+                          </Link>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {profile.role === "tenant" && (
+          <TabsContent value="bookings" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold">My Bookings</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                {isLoadingBookings ? (
+                  <div className="flex items-center justify-center p-6">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    <span>Loading bookings...</span>
+                  </div>
+                ) : userBookings.length === 0 ? (
+                  <p className="text-center text-gray-500">You have no active bookings yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {userBookings.map((booking) => (
+                      <Card
+                        key={booking._id}
+                        className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4"
+                      >
+                        <div className="relative h-24 w-full sm:w-24 flex-shrink-0 rounded-md overflow-hidden bg-gray-200">
+                          {booking.property.imageUrl ? (
+                            <Image
+                              src={booking.property.imageUrl || "/placeholder.svg"}
+                              alt={booking.property.title}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-full w-full text-gray-400">
+                              <Building2 className="h-8 w-8" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 grid gap-1">
+                          <h3 className="font-bold text-lg">{booking.property.title}</h3>
+                          <p className="text-sm text-gray-500 flex items-center gap-1">
+                            <MapPin className="h-4 w-4" /> {booking.property.location}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-semibold">Dates:</span>{" "}
+                            {format(new Date(booking.startDate), "MMM dd, yyyy")} -{" "}
+                            {format(new Date(booking.endDate), "MMM dd, yyyy")}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-semibold">Total Price:</span> KSh{" "}
+                            {booking.totalPrice.toLocaleString()}
+                          </p>
+                          <p className="text-sm">
+                            <span className="font-semibold">Status:</span>{" "}
+                            <span
+                              className={`capitalize font-medium ${
+                                booking.status === "confirmed"
+                                  ? "text-green-600"
+                                  : booking.status === "pending"
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                              }`}
+                            >
+                              {booking.status}
+                            </span>
+                          </p>
+                          <Link
+                            href={`/listings/${booking.property._id}`}
+                            className="text-blue-500 hover:underline text-sm mt-1 block"
+                          >
+                            View Property
+                          </Link>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   )
 }

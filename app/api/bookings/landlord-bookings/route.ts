@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { connectDB } from "@/lib/mongodb"
-import { Booking, Listing } from "@/lib/models"
+import { Booking } from "@/lib/models"
 import { verifyToken } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
@@ -12,19 +12,20 @@ export async function GET(request: NextRequest) {
     const currentUser = authResult.user
 
     if (currentUser.role !== "landlord") {
-      return NextResponse.json({ message: "Only landlords can view bookings for their properties" }, { status: 403 })
+      return NextResponse.json({ message: "Only landlords can view their property bookings" }, { status: 403 })
     }
 
     await connectDB()
 
-    // Find all listings owned by the landlord
-    const landlordListings = await Listing.find({ landlord: currentUser._id }).select("_id")
-    const listingIds = landlordListings.map((listing) => listing._id)
-
-    // Find bookings for these listings
-    const bookings = await Booking.find({ property: { $in: listingIds } })
-      .populate("property", "title location price imageUrl")
-      .populate("tenant", "name email")
+    const bookings = await Booking.find({ landlord: currentUser._id })
+      .populate({
+        path: "property",
+        select: "title location price imageUrl",
+      })
+      .populate({
+        path: "tenant",
+        select: "name email",
+      })
       .sort({ createdAt: -1 })
 
     return NextResponse.json(bookings)

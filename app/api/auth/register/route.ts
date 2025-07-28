@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
       phone: phone?.trim() || null,
       subscribeToUpdates: Boolean(subscribeToUpdates),
       authProvider: "credentials",
-      emailVerified: false,
+      emailVerified: true, // For simplicity, assume email is verified on registration
       isActive: true,
     }
 

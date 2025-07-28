@@ -1,33 +1,42 @@
 "use client"
 
-import * as React from "react"
+import { Button } from "@/components/ui/button"
+
+import { useState, useEffect } from "react"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Loader2, MessageSquare } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
-import { Building2, MessageSquare } from "lucide-react"
-import { Input } from "@/components/ui/input"
 import Link from "next/link"
+import Image from "next/image"
 
-interface ConversationItem {
+interface Participant {
   _id: string
-  otherParticipant: {
-    _id: string
-    name: string
-    email: string
-    role: string
-  } | null
-  lastMessage: {
-    content: string
-    createdAt: string
-    senderName: string
-  } | null
-  property: {
-    _id: string
-    title: string
-    imageUrl?: string
-  } | null
+  name: string
+  email: string
+  role: string
+}
+
+interface Property {
+  _id: string
+  title: string
+  location: string
+  imageUrl?: string
+}
+
+interface LastMessage {
+  content: string
+  sender: string
+  createdAt: string
+}
+
+interface Conversation {
+  _id: string
+  otherParticipant: Participant
+  property?: Property
+  lastMessage?: LastMessage
   createdAt: string
   updatedAt: string
 }
@@ -38,151 +47,138 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ onSelectConversation, selectedConversationId }: ConversationListProps) {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
-  const [conversations, setConversations] = React.useState<ConversationItem[]>([])
-  const [isLoading, setIsLoading] = React.useState(true)
-  const [searchTerm, setSearchTerm] = React.useState("")
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  const fetchConversations = React.useCallback(async () => {
-    if (!user) return
+  useEffect(() => {
+    if (authLoading || !user) return
 
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem("token")
-      const response = await fetch("/api/conversations", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+    const fetchConversations = async () => {
+      setIsLoading(true)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch("/api/conversations", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
-      if (response.ok) {
-        const data: ConversationItem[] = await response.json()
-        setConversations(data)
-      } else {
-        const errorData = await response.json()
+        if (response.ok) {
+          const data: Conversation[] = await response.json()
+          setConversations(data)
+        } else {
+          const errorData = await response.json()
+          toast({
+            title: "Error",
+            description: errorData.message || "Failed to fetch conversations.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching conversations:", error)
         toast({
-          title: "Error",
-          description: errorData.message || "Failed to fetch conversations.",
+          title: "Network Error",
+          description: "Unable to connect to server to fetch conversations.",
           variant: "destructive",
         })
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching conversations:", error)
-      toast({
-        title: "Error",
-        description: "Something went wrong while fetching conversations.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
     }
-  }, [user, toast])
 
-  React.useEffect(() => {
     fetchConversations()
-    // Optional: Set up polling for real-time updates (e.g., every 5 seconds)
-    const interval = setInterval(fetchConversations, 5000)
+
+    // Optional: Set up polling for new conversations/messages
+    const interval = setInterval(fetchConversations, 30000) // Poll every 30 seconds
     return () => clearInterval(interval)
-  }, [fetchConversations])
-
-  const filteredConversations = conversations.filter((conv) => {
-    const searchLower = searchTerm.toLowerCase()
-    const participantName = conv.otherParticipant?.name.toLowerCase() || ""
-    const propertyTitle = conv.property?.title.toLowerCase() || ""
-    const lastMessageContent = conv.lastMessage?.content.toLowerCase() || ""
-
-    return (
-      participantName.includes(searchLower) ||
-      propertyTitle.includes(searchLower) ||
-      lastMessageContent.includes(searchLower)
-    )
-  })
+  }, [user, authLoading, toast])
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-2 p-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="flex items-center space-x-3 animate-pulse">
-            <Avatar className="h-10 w-10 bg-gray-200 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 bg-gray-200 rounded w-3/4" />
-              <div className="h-3 bg-gray-200 rounded w-1/2" />
-            </div>
-          </div>
-        ))}
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading conversations...</span>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="flex h-full items-center justify-center text-center p-4">
+        <p className="text-gray-500">Please log in to view your messages.</p>
+      </div>
+    )
+  }
+
+  if (conversations.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center text-center p-4">
+        <MessageSquare className="h-12 w-12 text-gray-400 mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No conversations yet</h3>
+        <p className="text-gray-600 mb-4">
+          Start a new conversation by messaging a landlord or tenant from a property listing or profile page.
+        </p>
+        <Link href="/listings">
+          <Button>Browse Properties</Button>
+        </Link>
       </div>
     )
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="p-4 border-b">
-        <h2 className="text-xl font-semibold mb-2">Messages</h2>
-        <Input
-          placeholder="Search conversations..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full"
-        />
-      </div>
-      <ScrollArea className="flex-1">
-        <div className="p-2">
-          {filteredConversations.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              <MessageSquare className="h-10 w-10 mx-auto mb-3" />
-              <p>No conversations found.</p>
-              <p className="text-sm">Start a chat from a property listing.</p>
-            </div>
-          ) : (
-            filteredConversations.map((conv) => (
-              <div
-                key={conv._id}
-                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${
-                  selectedConversationId === conv._id ? "bg-gray-100" : ""
-                }`}
-                onClick={() => onSelectConversation(conv._id)}
-              >
-                <Link href={`/profile/${conv.otherParticipant?._id}`} className="flex-shrink-0">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage
-                      src={`https://api.dicebear.com/7.x/initials/svg?seed=${conv.otherParticipant?.name}`}
-                    />
-                    <AvatarFallback>
-                      {conv.otherParticipant?.name
-                        ? conv.otherParticipant.name.charAt(0).toUpperCase()
-                        : conv.property?.title.charAt(0).toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Link>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center">
-                    <Link href={`/profile/${conv.otherParticipant?._id}`}>
-                      <p className="font-medium truncate">{conv.otherParticipant?.name || "Unknown User"}</p>
-                    </Link>
-                    {conv.lastMessage && (
-                      <span className="text-xs text-gray-500 flex-shrink-0">
-                        {formatDistanceToNowStrict(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
-                      </span>
-                    )}
-                  </div>
-                  {conv.property && (
-                    <p className="text-xs text-gray-600 truncate flex items-center gap-1">
-                      <Building2 className="h-3 w-3" />
-                      {conv.property.title}
-                    </p>
-                  )}
-                  {conv.lastMessage ? (
-                    <p className="text-sm text-gray-500 truncate">{conv.lastMessage.content}</p>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic">No messages yet.</p>
-                  )}
-                </div>
+    <ScrollArea className="h-full">
+      <div className="p-4">
+        {conversations.map((conv) => (
+          <div
+            key={conv._id}
+            className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer mb-2 transition-colors ${
+              selectedConversationId === conv._id
+                ? "bg-blue-100 dark:bg-blue-900"
+                : "hover:bg-gray-100 dark:hover:bg-gray-800"
+            }`}
+            onClick={() => onSelectConversation(conv._id)}
+          >
+            <Avatar className="h-10 w-10">
+              <AvatarImage
+                src={`https://api.dicebear.com/7.x/initials/svg?seed=${conv.otherParticipant?.name || "User"}`}
+              />
+              <AvatarFallback>{conv.otherParticipant?.name?.charAt(0).toUpperCase() || "U"}</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-center">
+                <h4 className="font-semibold truncate">{conv.otherParticipant?.name || "Unknown User"}</h4>
+                {conv.lastMessage && (
+                  <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                    {formatDistanceToNowStrict(new Date(conv.lastMessage.createdAt), { addSuffix: true })}
+                  </span>
+                )}
               </div>
-            ))
-          )}
-        </div>
-      </ScrollArea>
-    </div>
+              {conv.property && (
+                <div className="flex items-center text-xs text-gray-600 mt-1">
+                  {conv.property.imageUrl && (
+                    <Image
+                      src={conv.property.imageUrl || "/placeholder.svg"}
+                      alt={conv.property.title}
+                      width={20}
+                      height={20}
+                      className="rounded mr-1 object-cover"
+                    />
+                  )}
+                  <span className="truncate">{conv.property.title}</span>
+                </div>
+              )}
+              {conv.lastMessage && (
+                <p className="text-sm text-gray-700 truncate mt-1">
+                  {conv.lastMessage.sender === user._id ? "You: " : ""}
+                  {conv.lastMessage.content}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </ScrollArea>
   )
 }

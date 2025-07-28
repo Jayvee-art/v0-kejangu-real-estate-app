@@ -3,21 +3,6 @@ import { connectDB } from "@/lib/mongodb"
 import { Listing } from "@/lib/models"
 import { verifyToken } from "@/lib/auth"
 
-// GET all listings
-export async function GET(request: NextRequest) {
-  try {
-    await connectDB()
-
-    const listings = await Listing.find().populate("landlord", "name email").sort({ createdAt: -1 })
-
-    return NextResponse.json(listings)
-  } catch (error) {
-    console.error("Error fetching listings:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
-  }
-}
-
-// POST new listing
 export async function POST(request: NextRequest) {
   try {
     const authResult = await verifyToken(request)
@@ -33,12 +18,12 @@ export async function POST(request: NextRequest) {
     const { title, description, price, location, imageUrl } = await request.json()
 
     if (!title || !description || !price || !location) {
-      return NextResponse.json({ message: "All required fields must be provided" }, { status: 400 })
+      return NextResponse.json({ message: "All fields are required" }, { status: 400 })
     }
 
     await connectDB()
 
-    const listing = await Listing.create({
+    const newListing = new Listing({
       title,
       description,
       price,
@@ -47,11 +32,22 @@ export async function POST(request: NextRequest) {
       landlord: currentUser._id,
     })
 
-    const populatedListing = await Listing.findById(listing._id).populate("landlord", "name email")
+    await newListing.save()
 
-    return NextResponse.json(populatedListing, { status: 201 })
+    return NextResponse.json({ message: "Listing created successfully", listing: newListing }, { status: 201 })
   } catch (error) {
     console.error("Error creating listing:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    await connectDB()
+    const listings = await Listing.find({}).populate("landlord", "name email").sort({ createdAt: -1 })
+    return NextResponse.json(listings)
+  } catch (error) {
+    console.error("Error fetching listings:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }

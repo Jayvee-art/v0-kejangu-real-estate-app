@@ -1,110 +1,146 @@
 const mongoose = require("mongoose")
 const bcrypt = require("bcryptjs")
-const { User, Listing, Booking } = require("../lib/models") // Adjust path as needed
+const { User, Listing, Booking, Conversation, Message } = require("../lib/models") // Adjust path as needed
+const { connectDB } = require("../lib/mongodb") // Adjust path as needed
 
-require("dotenv").config({ path: ".env.local" }) // Load .env.local
+require("dotenv").config({ path: ".env.local" })
 
-const MONGODB_URI = process.env.MONGODB_URI
-
-if (!MONGODB_URI) {
-  console.error("MONGODB_URI is not defined in .env.local")
-  process.exit(1)
-}
-
-async function connectDB() {
-  if (mongoose.connection.readyState >= 1) {
-    return
-  }
-  return mongoose.connect(MONGODB_URI)
-}
-
-async function seedDatabase() {
+const seedDatabase = async () => {
   try {
     await connectDB()
-    console.log("MongoDB connected for seeding.")
+    console.log("Database connected for seeding.")
 
-    // Clear existing test data
-    console.log("Clearing existing test users, listings, and bookings...")
-    await User.deleteMany({ email: { $in: ["landlord@test.com", "tenant@test.com", "admin@test.com"] } })
+    // Clear existing data (optional, for fresh seeding)
+    console.log("Clearing existing data...")
+    await User.deleteMany({})
     await Listing.deleteMany({})
     await Booking.deleteMany({})
-    console.log("Existing test data cleared.")
+    await Conversation.deleteMany({})
+    await Message.deleteMany({})
+    console.log("Existing data cleared.")
 
-    const hashedPassword = await bcrypt.hash("123456", 10)
-
+    // Create Users
     console.log("Creating test users...")
-    const landlord = await User.create({
-      name: "Test Landlord",
-      email: "landlord@test.com",
-      password: hashedPassword,
+    const hashedPasswordLandlord = await bcrypt.hash("landlord123", 10)
+    const hashedPasswordTenant = await bcrypt.hash("tenant123", 10)
+    const hashedPasswordAdmin = await bcrypt.hash("admin123", 10)
+
+    const landlordUser = await User.create({
+      name: "Alice Landlord",
+      email: "landlord@example.com",
+      password: hashedPasswordLandlord,
       role: "landlord",
       country: "Kenya",
       phone: "+254712345678",
       emailVerified: true,
+      isActive: true,
     })
 
-    const tenant = await User.create({
-      name: "Test Tenant",
-      email: "tenant@test.com",
-      password: hashedPassword,
+    const tenantUser = await User.create({
+      name: "Bob Tenant",
+      email: "tenant@example.com",
+      password: hashedPasswordTenant,
       role: "tenant",
       country: "Kenya",
-      phone: "+254787654321",
+      phone: "+254723456789",
       emailVerified: true,
+      isActive: true,
     })
 
-    const admin = await User.create({
-      name: "Test Admin",
-      email: "admin@test.com",
-      password: hashedPassword,
+    const adminUser = await User.create({
+      name: "Charlie Admin",
+      email: "admin@example.com",
+      password: hashedPasswordAdmin,
       role: "admin",
       emailVerified: true,
+      isActive: true,
     })
-    console.log("Test users created.")
 
+    console.log("Test users created:", landlordUser.email, tenantUser.email, adminUser.email)
+
+    // Create Listings
     console.log("Creating test listings...")
     const listing1 = await Listing.create({
-      title: "Spacious Apartment in Westlands",
-      description: "A beautiful 3-bedroom apartment with modern amenities and city views.",
-      price: 75000,
-      location: "Westlands",
-      imageUrl: "/placeholder.svg?height=400&width=600",
-      landlord: landlord._id,
+      title: "Modern Apartment in Westlands",
+      description: "Spacious 3-bedroom apartment with modern amenities and city views.",
+      price: 75000, // KSh
+      location: "Westlands, Nairobi",
+      imageUrl: "https://res.cloudinary.com/demo/image/upload/v1678901234/apartment1.jpg", // Placeholder
+      landlord: landlordUser._id,
     })
 
     const listing2 = await Listing.create({
-      title: "Cozy House in Karen",
-      description: "A charming 4-bedroom house with a large garden, perfect for families.",
-      price: 120000,
-      location: "Karen",
-      imageUrl: "/placeholder.svg?height=400&width=600",
-      landlord: landlord._id,
+      title: "Cozy Studio in Kilimani",
+      description: "Affordable and comfortable studio apartment, perfect for singles.",
+      price: 30000, // KSh
+      location: "Kilimani, Nairobi",
+      imageUrl: "https://res.cloudinary.com/demo/image/upload/v1678901235/studio1.jpg", // Placeholder
+      landlord: landlordUser._id,
     })
-    console.log("Test listings created.")
 
+    const listing3 = await Listing.create({
+      title: "Family House in Karen",
+      description: "Large 5-bedroom house with a garden, ideal for families.",
+      price: 120000, // KSh
+      location: "Karen, Nairobi",
+      imageUrl: "https://res.cloudinary.com/demo/image/upload/v1678901236/house1.jpg", // Placeholder
+      landlord: landlordUser._id,
+    })
+
+    console.log("Test listings created:", listing1.title, listing2.title, listing3.title)
+
+    // Create Bookings
     console.log("Creating test bookings...")
-    await Booking.create({
+    const booking1 = await Booking.create({
       property: listing1._id,
-      tenant: tenant._id,
-      landlord: landlord._id,
-      startDate: new Date("2025-08-01"),
-      endDate: new Date("2025-08-15"),
-      totalPrice: listing1.price * 15, // Example calculation
+      tenant: tenantUser._id,
+      landlord: landlordUser._id,
+      startDate: new Date(new Date().setMonth(new Date().getMonth() + 1)), // Next month
+      endDate: new Date(new Date().setMonth(new Date().getMonth() + 2)), // Month after next
+      totalPrice: listing1.price * 1, // For 1 month
+      notes: "Looking forward to moving in!",
       status: "pending",
-      notes: "Looking forward to my stay!",
     })
-    console.log("Test bookings created.")
 
-    console.log("Database seeding complete!")
-    console.log("Test Landlord Email:", landlord.email)
-    console.log("Test Tenant Email:", tenant.email)
-    console.log("Test Admin Email:", admin.email)
-    console.log("Password for all test accounts: 123456")
+    const booking2 = await Booking.create({
+      property: listing2._id,
+      tenant: tenantUser._id,
+      landlord: landlordUser._id,
+      startDate: new Date(new Date().setMonth(new Date().getMonth() + 3)),
+      endDate: new Date(new Date().setMonth(new Date().getMonth() + 4)),
+      totalPrice: listing2.price * 1,
+      notes: "Need a quiet place for my studies.",
+      status: "confirmed",
+    })
+
+    console.log("Test bookings created:", booking1._id, booking2._id)
+
+    // Create Conversations (optional)
+    console.log("Creating test conversations...")
+    const conversation1 = await Conversation.create({
+      participants: [landlordUser._id, tenantUser._id],
+      property: listing1._id,
+    })
+
+    const message1 = await Message.create({
+      conversation: conversation1._id,
+      sender: tenantUser._id,
+      content: "Hi Alice, I'm interested in the Westlands apartment. Is it still available?",
+      readBy: [landlordUser._id],
+    })
+
+    conversation1.lastMessage = message1._id
+    await conversation1.save()
+
+    console.log("Test conversations and messages created.")
+
+    console.log("Seeding complete!")
   } catch (error) {
     console.error("Error seeding database:", error)
     process.exit(1)
   } finally {
-    mongoose.connection.close()
+    await mongoose.disconnect()
+    console.log("Database disconnected.")
   }
 }
 

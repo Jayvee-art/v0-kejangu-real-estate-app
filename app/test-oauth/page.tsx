@@ -1,186 +1,181 @@
 "use client"
 
-import { CardDescription } from "@/components/ui/card"
-
-import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Terminal, Info, CheckCircle, XCircle } from "lucide-react"
-import { useSession } from "next-auth/react"
-import { OAuthTestWidget } from "@/components/oauth-test-widget"
+import { signIn, signOut, useSession } from "next-auth/react"
+import { Loader2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useToast } from "@/hooks/use-toast"
 
-interface EnvConfig {
-  GOOGLE_CLIENT_ID: boolean
-  GOOGLE_CLIENT_SECRET: boolean
-  FACEBOOK_CLIENT_ID: boolean
-  FACEBOOK_CLIENT_SECRET: boolean
-  NEXTAUTH_SECRET: boolean
-}
-
-export default function OAuthDebugPage() {
+export default function TestOAuthPage() {
   const { data: session, status } = useSession()
-  const [envConfig, setEnvConfig] = useState<EnvConfig | null>(null)
-  const [isLoadingEnv, setIsLoadingEnv] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+  const [oauthConfig, setOauthConfig] = useState<any>(null)
+  const [configLoading, setConfigLoading] = useState(true)
 
   useEffect(() => {
-    const fetchEnvConfig = async () => {
-      setIsLoadingEnv(true)
-      setError(null)
+    const fetchOAuthConfig = async () => {
+      setConfigLoading(true)
       try {
         const response = await fetch("/api/debug/oauth-config")
-        if (response.ok) {
-          const data = await response.json()
-          setEnvConfig(data)
-        } else {
-          const errorData = await response.json()
-          setError(errorData.message || "Failed to fetch OAuth configuration.")
-        }
-      } catch (err: any) {
-        setError(err.message || "Network error fetching OAuth configuration.")
+        const data = await response.json()
+        setOauthConfig(data)
+      } catch (error) {
+        console.error("Failed to fetch OAuth config:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load OAuth configuration.",
+          variant: "destructive",
+        })
       } finally {
-        setIsLoadingEnv(false)
+        setConfigLoading(false)
       }
     }
+    fetchOAuthConfig()
+  }, [toast])
 
-    fetchEnvConfig()
-  }, [])
+  const handleSignIn = async (provider: string) => {
+    setIsLoading(true)
+    try {
+      await signIn(provider, { callbackUrl: "/test-oauth" })
+    } catch (error) {
+      console.error(`Error signing in with ${provider}:`, error)
+      toast({
+        title: "Sign In Failed",
+        description: `Could not sign in with ${provider}.`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    setIsLoading(true)
+    try {
+      await signOut({ callbackUrl: "/" })
+    } catch (error) {
+      console.error("Error signing out:", error)
+      toast({
+        title: "Sign Out Failed",
+        description: "Could not sign out.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  if (status === "loading" || configLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading authentication status...</span>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <h1 className="text-4xl font-bold text-gray-900 text-center">OAuth Debugging Panel</h1>
-        <p className="text-center text-gray-600">
-          Use this page to verify your NextAuth.js OAuth setup and environment variables.
-        </p>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+      <h1 className="text-3xl font-bold mb-8">OAuth Test Page</h1>
 
-        {error && (
-          <Alert variant="destructive">
-            <XCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      <Card className="w-full max-w-md mb-6">
+        <CardHeader>
+          <CardTitle>Current Session Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {session ? (
+            <div className="space-y-2">
+              <p>
+                <span className="font-semibold">Status:</span> Authenticated
+              </p>
+              <p>
+                <span className="font-semibold">User ID:</span> {session.user.id}
+              </p>
+              <p>
+                <span className="font-semibold">Name:</span> {session.user.name}
+              </p>
+              <p>
+                <span className="font-semibold">Email:</span> {session.user.email}
+              </p>
+              <p>
+                <span className="font-semibold">Role:</span> {session.user.role}
+              </p>
+              <Button onClick={handleSignOut} disabled={isLoading} className="mt-4 w-full">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p>
+                <span className="font-semibold">Status:</span> Unauthenticated
+              </p>
+              <p>No active session.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Environment Variable Check */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Terminal className="h-5 w-5" /> Environment Variables Check
-            </CardTitle>
-            <CardDescription>Verifies if necessary OAuth environment variables are set.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoadingEnv ? (
-              <p className="text-gray-500">Loading environment configuration...</p>
-            ) : envConfig ? (
-              <div className="space-y-2">
-                {Object.entries(envConfig).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    {value ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-500" />
-                    )}
-                    <span className="font-mono">{key}:</span>
-                    <span className={value ? "text-green-700" : "text-red-700"}>
-                      {value ? "Configured" : "Missing/Empty"}
-                    </span>
-                  </div>
-                ))}
-                {!envConfig.NEXTAUTH_SECRET && (
-                  <Alert className="mt-4">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>NEXTAUTH_SECRET Warning</AlertTitle>
-                    <AlertDescription>
-                      `NEXTAUTH_SECRET` is crucial for security. If not set, NextAuth.js will generate a random one in
-                      development, but it must be set in production.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            ) : (
-              <p className="text-gray-500">Could not retrieve environment configuration.</p>
-            )}
-          </CardContent>
-        </Card>
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Sign In with OAuth Providers</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {oauthConfig?.googleEnabled ? (
+            <Button onClick={() => handleSignIn("google")} disabled={isLoading} className="w-full">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Sign In with Google
+            </Button>
+          ) : (
+            <p className="text-sm text-gray-500">Google OAuth not configured (missing CLIENT_ID/SECRET)</p>
+          )}
 
-        {/* Session Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" /> Current Session Status
-            </CardTitle>
-            <CardDescription>Displays the current authentication status and user data.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>
-              Session Status: <span className="font-semibold capitalize">{status}</span>
-            </p>
-            {status === "authenticated" && (
-              <div className="mt-4 space-y-2">
-                <h3 className="font-semibold">User Data:</h3>
-                <pre className="bg-gray-100 p-4 rounded-md text-sm overflow-auto">
-                  {JSON.stringify(session.user, null, 2)}
-                </pre>
-                <p className="text-sm text-gray-600">
-                  User ID: <span className="font-mono">{session.user.id}</span>
-                </p>
-                <p className="text-sm text-gray-600">
-                  User Role: <span className="font-mono">{session.user.role}</span>
-                </p>
-              </div>
-            )}
-            {status === "unauthenticated" && <p className="mt-4 text-gray-600">You are currently not logged in.</p>}
-          </CardContent>
-        </Card>
+          {oauthConfig?.facebookEnabled ? (
+            <Button onClick={() => handleSignIn("facebook")} disabled={isLoading} className="w-full">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Sign In with Facebook
+            </Button>
+          ) : (
+            <p className="text-sm text-gray-500">Facebook OAuth not configured (missing CLIENT_ID/SECRET)</p>
+          )}
 
-        {/* OAuth Login Test Widget */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" /> Test OAuth Logins
-            </CardTitle>
-            <CardDescription>Attempt to log in using configured OAuth providers.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <OAuthTestWidget />
-          </CardContent>
-        </Card>
+          <Button onClick={() => handleSignIn("credentials")} disabled={isLoading} className="w-full">
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Sign In with Credentials
+          </Button>
+        </CardContent>
+      </Card>
 
-        {/* Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5" /> Instructions
-            </CardTitle>
-            <CardDescription>How to use this debugging panel.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4 text-gray-700">
-            <p>
-              1. **Environment Variables**: Ensure all required `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-              `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, and `NEXTAUTH_SECRET` are set in your `.env.local` file
-              (for local development) or Vercel project settings (for deployment).
-            </p>
-            <p>
-              2. **Test Logins**: Use the "Test OAuth Logins" section to attempt signing in with Google or Facebook.
-              Observe the session status update.
-            </p>
-            <p>
-              3. **Verify User Data**: After successful login, check the "Current Session Status" to ensure `user.id`
-              and `user.role` are correctly populated.
-            </p>
-            <p>
-              4. **Troubleshooting**: If logins fail, check your provider configurations (redirect URIs, client
-              IDs/secrets) and your server logs for more detailed errors.
-            </p>
-            <p className="text-sm text-gray-500">
-              Note: This page is for debugging purposes and should not be exposed in production without proper access
-              control.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="w-full max-w-md mt-6">
+        <CardHeader>
+          <CardTitle>OAuth Configuration Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {oauthConfig ? (
+            <div className="space-y-2 text-sm">
+              <p>
+                Google Enabled:{" "}
+                <span className={oauthConfig.googleEnabled ? "text-green-600" : "text-red-600"}>
+                  {oauthConfig.googleEnabled ? "Yes" : "No"}
+                </span>
+              </p>
+              <p>
+                Facebook Enabled:{" "}
+                <span className={oauthConfig.facebookEnabled ? "text-green-600" : "text-red-600"}>
+                  {oauthConfig.facebookEnabled ? "Yes" : "No"}
+                </span>
+              </p>
+              <p className="text-gray-500">
+                (Ensure `NEXTAUTH_URL` is set correctly in your `.env.local` for callbacks)
+              </p>
+            </div>
+          ) : (
+            <p>Loading configuration...</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

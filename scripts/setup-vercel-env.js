@@ -1,56 +1,75 @@
 const { execSync } = require("child_process")
-const readline = require("readline")
+const fs = require("fs")
+const path = require("path")
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
+const envLocalPath = path.resolve(process.cwd(), ".env.local")
+
+if (!fs.existsSync(envLocalPath)) {
+  console.error("Error: .env.local file not found. Please create it with your environment variables.")
+  process.exit(1)
+}
+
+const envContent = fs.readFileSync(envLocalPath, "utf8")
+const lines = envContent.split("\n")
+
+const envVars = {}
+lines.forEach((line) => {
+  const trimmedLine = line.trim()
+  if (trimmedLine && !trimmedLine.startsWith("#")) {
+    const [key, value] = trimmedLine.split("=")
+    if (key && value) {
+      envVars[key] = value
+    }
+  }
 })
 
-const envVars = [
+const projectEnvVars = [
   "MONGODB_URI",
   "JWT_SECRET",
   "NEXTAUTH_SECRET",
   "CLOUDINARY_CLOUD_NAME",
   "CLOUDINARY_API_KEY",
   "CLOUDINARY_API_SECRET",
-  "OPENAI_API_KEY",
   "EMAIL_HOST",
   "EMAIL_PORT",
   "EMAIL_USER",
   "EMAIL_PASS",
   "EMAIL_FROM",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "FACEBOOK_CLIENT_ID",
+  "FACEBOOK_CLIENT_SECRET",
+  "NEXTAUTH_URL",
 ]
 
-async function setVercelEnv() {
-  console.log("Setting Vercel Environment Variables...")
+console.log("Setting Vercel environment variables...")
 
-  for (const envVar of envVars) {
-    const value = process.env[envVar]
-    if (value) {
-      try {
-        console.log(`Setting ${envVar} for development...`)
-        execSync(`vercel env add ${envVar} ${value} development`)
-        console.log(`Setting ${envVar} for preview...`)
-        execSync(`vercel env add ${envVar} ${value} preview`)
-        console.log(`Setting ${envVar} for production...`)
-        execSync(`vercel env add ${envVar} ${value} production`)
-        console.log(`Successfully set ${envVar}`)
-      } catch (error) {
-        console.error(`Failed to set ${envVar}:`, error.message)
-        console.error(
-          "Please ensure you are logged into Vercel CLI (`vercel login`) and are in the correct project directory.",
-        )
-        return // Exit if any command fails
+projectEnvVars.forEach((key) => {
+  const value = envVars[key]
+  if (value) {
+    try {
+      // Use --build-time for variables needed during build process (e.g., NEXTAUTH_SECRET)
+      // Use --sensitive for variables that should not be exposed in logs
+      const flags = ["--git"] // Apply to all Git branches
+      if (["NEXTAUTH_SECRET", "JWT_SECRET", "CLOUDINARY_API_SECRET", "EMAIL_PASS"].includes(key)) {
+        flags.push("--sensitive")
       }
-    } else {
-      console.warn(`Warning: ${envVar} is not set in your local environment. Skipping.`)
+      if (["NEXTAUTH_SECRET"].includes(key)) {
+        flags.push("--build-time")
+      }
+
+      execSync(`vercel env add ${key} ${flags.join(" ")}`, {
+        input: value,
+        stdio: "inherit", // Show output from vercel command
+      })
+      console.log(`Successfully set ${key} on Vercel.`)
+    } catch (error) {
+      console.error(`Failed to set ${key} on Vercel:`, error.message)
     }
+  } else {
+    console.warn(`Warning: ${key} not found in .env.local. Skipping Vercel environment setup for this variable.`)
   }
+})
 
-  console.log("\nAll specified Vercel Environment Variables have been processed.")
-  console.log("Remember to manually add any sensitive variables that should not be in .env.local.")
-
-  rl.close()
-}
-
-setVercelEnv()
+console.log("Vercel environment variable setup complete.")
+console.log("Remember to redeploy your Vercel project for changes to take effect.")

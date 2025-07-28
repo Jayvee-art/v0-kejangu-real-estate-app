@@ -1,158 +1,213 @@
 "use client"
 
-import * as React from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import type React from "react"
+import { useState, useEffect } from "react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
-import { useRouter } from "next/navigation"
 
 interface NewConversationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   recipientId: string
-  recipientName: string
-  propertyId?: string
   propertyName?: string
+  propertyId?: string
+  onSuccess: (newConversationId: string) => void
+}
+
+interface RecipientProfile {
+  _id: string
+  name: string
+  email: string
+  role: string
 }
 
 export function NewConversationDialog({
   open,
   onOpenChange,
   recipientId,
-  recipientName,
-  propertyId,
   propertyName,
+  propertyId,
+  onSuccess,
 }: NewConversationDialogProps) {
-  const [messageContent, setMessageContent] = React.useState("")
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [initialMessage, setInitialMessage] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [recipientProfile, setRecipientProfile] = useState<RecipientProfile | null>(null)
+  const [isLoadingRecipient, setIsLoadingRecipient] = useState(true)
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
-  const { user } = useAuth()
-  const router = useRouter()
 
-  React.useEffect(() => {
-    if (!open) {
-      setMessageContent("") // Reset message when dialog closes
+  useEffect(() => {
+    if (!open || authLoading || !user) {
+      setRecipientProfile(null)
+      setInitialMessage("")
+      return
     }
-  }, [open])
 
-  const handleStartConversation = async (e: React.FormEvent) => {
+    const fetchRecipientProfile = async () => {
+      setIsLoadingRecipient(true)
+      try {
+        const token = localStorage.getItem("token")
+        const response = await fetch(`/api/users/${recipientId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (response.ok) {
+          const data: RecipientProfile = await response.json()
+          setRecipientProfile(data)
+        } else {
+          const errorData = await response.json()
+          toast({
+            title: "Error",
+            description: errorData.message || "Failed to fetch recipient profile.",
+            variant: "destructive",
+          })
+          onOpenChange(false) // Close dialog on error
+        }
+      } catch (error) {
+        console.error("Error fetching recipient profile:", error)
+        toast({
+          title: "Network Error",
+          description: "Unable to connect to server to fetch recipient profile.",
+          variant: "destructive",
+        })
+        onOpenChange(false) // Close dialog on error
+      } finally {
+        setIsLoadingRecipient(false)
+      }
+    }
+
+    fetchRecipientProfile()
+  }, [open, recipientId, user, authLoading, onOpenChange, toast])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!user) {
+    if (!initialMessage.trim() || !user || !recipientProfile) {
       toast({
-        title: "Authentication Required",
-        description: "Please log in to start a conversation.",
-        variant: "destructive",
-      })
-      router.push("/auth/login")
-      return
-    }
-
-    if (!messageContent.trim()) {
-      toast({
-        title: "Message Required",
-        description: "Please type a message to start the conversation.",
+        title: "Missing Information",
+        description: "Please enter a message and ensure recipient details are loaded.",
         variant: "destructive",
       })
       return
     }
 
-    setIsLoading(true)
+    setIsSubmitting(true)
     try {
       const token = localStorage.getItem("token")
-      const conversationResponse = await fetch("/api/conversations", {
+      const response = await fetch("/api/conversations", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ recipientId, propertyId }),
+        body: JSON.stringify({
+          recipientId,
+          propertyId: propertyId || null,
+          initialMessage,
+        }),
       })
 
-      const convData = await conversationResponse.json()
+      const data = await response.json()
 
-      if (!conversationResponse.ok && conversationResponse.status !== 200) {
-        // 200 means conversation already exists, which is fine
-        throw new Error(convData.message || "Failed to create/find conversation.")
-      }
-
-      const conversationId = convData.conversationId
-
-      // Send the initial message
-      const messageResponse = await fetch(`/api/conversations/${conversationId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content: messageContent }),
-      })
-
-      if (messageResponse.ok) {
+      if (response.ok) {
         toast({
-          title: "Message Sent!",
-          description: `Your message has been sent to ${recipientName}.`,
+          title: "Conversation Started!",
+          description: `Your message has been sent to ${recipientProfile.name}.`,
         })
+        onSuccess(data.conversation._id) // Pass new conversation ID to parent
         onOpenChange(false)
-        // Optionally, open the chat layout directly
-        // router.push(`/messages?conversationId=${conversationId}`);
       } else {
-        const msgData = await messageResponse.json()
-        throw new Error(msgData.message || "Failed to send message.")
+        toast({
+          title: "Failed to Start Conversation",
+          description: data.message || "An error occurred.",
+          variant: "destructive",
+        })
       }
-    } catch (error: any) {
-      console.error("Error starting conversation:", error)
+    } catch (error) {
+      console.error("Start conversation error:", error)
       toast({
-        title: "Error",
-        description: error.message || "Something went wrong. Please try again.",
+        title: "Network Error",
+        description: "Unable to connect to server. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
+
+  const dialogTitle = propertyName ? `Message about ${propertyName}` : `Message ${recipientProfile?.name || "User"}`
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Message {recipientName}</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>
-            {propertyName ? `About property: ${propertyName}` : "Start a direct conversation."}
+            {propertyName
+              ? `Send a message to ${recipientProfile?.name || "the landlord"} regarding ${propertyName}.`
+              : `Start a new conversation with ${recipientProfile?.name || "this user"}.`}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleStartConversation} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="message">Your Message</Label>
-            <Textarea
-              id="message"
-              value={messageContent}
-              onChange={(e) => setMessageContent(e.target.value)}
-              placeholder="Type your message here..."
-              rows={5}
-              required
-            />
+        {isLoadingRecipient ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Loading recipient details...</span>
           </div>
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading || !messageContent.trim()}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                "Send Message"
-              )}
-            </Button>
+        ) : !recipientProfile ? (
+          <div className="text-center py-8 text-red-500">
+            <p>Could not load recipient details. Please try again.</p>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="recipient-name">Recipient</Label>
+              <p id="recipient-name" className="text-sm font-medium">
+                {recipientProfile.name} ({recipientProfile.email})
+              </p>
+            </div>
+            {propertyName && (
+              <div className="grid gap-2">
+                <Label htmlFor="property-name">Property</Label>
+                <p id="property-name" className="text-sm font-medium">
+                  {propertyName}
+                </p>
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="message">Your Message</Label>
+              <Textarea
+                id="message"
+                placeholder="Type your initial message here..."
+                value={initialMessage}
+                onChange={(e) => setInitialMessage(e.target.value)}
+                rows={5}
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !initialMessage.trim()}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Send Message
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   )

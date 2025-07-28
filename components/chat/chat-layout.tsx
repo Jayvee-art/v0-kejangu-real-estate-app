@@ -1,50 +1,95 @@
 "use client"
 
-import * as React from "react"
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
-import { ChatWindow } from "./chat-window"
-import { ConversationList } from "./conversation-list"
-import { Button } from "@/components/ui/button"
-import { X } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ConversationList } from "@/components/chat/conversation-list"
+import { ChatWindow } from "@/components/chat/chat-window"
+import { useAuth } from "@/components/auth-provider"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
+import { NewConversationDialog } from "@/components/chat/new-conversation-dialog"
 
-interface ChatLayoutProps {
-  onClose: () => void
-}
+export default function ChatLayout() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
 
-export function ChatLayout({ onClose }: ChatLayoutProps) {
-  const [selectedConversationId, setSelectedConversationId] = React.useState<string | null>(null)
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [showNewConversationDialog, setShowNewConversationDialog] = useState(false)
+  const [newConversationRecipientId, setNewConversationRecipientId] = useState<string | null>(null)
+  const [newConversationPropertyName, setNewConversationPropertyName] = useState<string | null>(null)
+  const [newConversationPropertyId, setNewConversationPropertyId] = useState<string | null>(null)
 
-  const handleSelectConversation = (id: string) => {
-    setSelectedConversationId(id)
+  useEffect(() => {
+    if (authLoading) return
+
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to view your messages.",
+        variant: "destructive",
+      })
+      router.push("/auth/login")
+      return
+    }
+
+    const conversationIdFromUrl = searchParams.get("conversationId")
+    const conversationWith = searchParams.get("conversationWith")
+    const propertyId = searchParams.get("propertyId")
+    const propertyName = searchParams.get("propertyName")
+
+    if (conversationIdFromUrl) {
+      setSelectedConversationId(conversationIdFromUrl)
+    } else if (conversationWith && propertyId && propertyName) {
+      // If starting a new conversation from URL params
+      setNewConversationRecipientId(conversationWith)
+      setNewConversationPropertyId(propertyId)
+      setNewConversationPropertyName(propertyName)
+      setShowNewConversationDialog(true)
+    }
+  }, [user, authLoading, router, searchParams, toast])
+
+  const handleNewConversationSuccess = (newConvId: string) => {
+    setShowNewConversationDialog(false)
+    setNewConversationRecipientId(null)
+    setNewConversationPropertyId(null)
+    setNewConversationPropertyName(null)
+    setSelectedConversationId(newConvId)
+    router.replace(`/messages?conversationId=${newConvId}`) // Update URL without full reload
+  }
+
+  if (authLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading messages...</span>
+      </div>
+    )
   }
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
-        <h2 className="text-xl font-semibold">Direct Messages</h2>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-5 w-5" />
-          <span className="sr-only">Close chat</span>
-        </Button>
+    <div className="flex h-[calc(100vh-64px)] max-h-[calc(100vh-64px)]">
+      <div className="w-80 border-r bg-white dark:bg-gray-950">
+        <ConversationList
+          onSelectConversation={setSelectedConversationId}
+          selectedConversationId={selectedConversationId}
+        />
       </div>
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
-        <ResizablePanel defaultSize={30} minSize={20}>
-          <ConversationList
-            onSelectConversation={handleSelectConversation}
-            selectedConversationId={selectedConversationId}
-          />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={70} minSize={40}>
-          {selectedConversationId ? (
-            <ChatWindow conversationId={selectedConversationId} onClose={() => setSelectedConversationId(null)} />
-          ) : (
-            <div className="flex h-full items-center justify-center text-gray-500">
-              <p>Select a conversation to view messages</p>
-            </div>
-          )}
-        </ResizablePanel>
-      </ResizablePanelGroup>
+      <div className="flex-1">
+        <ChatWindow conversationId={selectedConversationId} />
+      </div>
+
+      {newConversationRecipientId && (
+        <NewConversationDialog
+          open={showNewConversationDialog}
+          onOpenChange={setShowNewConversationDialog}
+          recipientId={newConversationRecipientId}
+          propertyName={newConversationPropertyName || undefined}
+          propertyId={newConversationPropertyId || undefined}
+          onSuccess={handleNewConversationSuccess}
+        />
+      )}
     </div>
   )
 }

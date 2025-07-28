@@ -1,60 +1,45 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { NextResponse } from "next/server"
+import { verifyToken } from "@/lib/auth"
 
-export async function GET() {
-  return NextResponse.json({ message: "Test portal is active!" }, { status: 200 })
-}
-
-export async function POST(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
-    const { portal, path } = await request.json()
+    const authResult = await verifyToken(request)
+    if (authResult.status !== 200) {
+      return NextResponse.json({ message: authResult.message }, { status: authResult.status })
+    }
+    const currentUser = authResult.user
 
-    if (!session) {
+    if (currentUser.role !== "admin") {
+      return NextResponse.json({ message: "Forbidden: Only admins can test portal access" }, { status: 403 })
+    }
+
+    // This is a placeholder for actual Vercel API interaction.
+    // In a real scenario, you might try to fetch Vercel project details
+    // using Vercel API tokens, which would be stored as environment variables.
+    // For this example, we'll simulate a successful check.
+
+    const vercelApiToken = process.env.VERCEL_API_TOKEN // Example env var
+
+    if (vercelApiToken) {
+      // Simulate a successful API call
       return NextResponse.json(
         {
-          success: false,
-          message: "Authentication required",
-          portal,
+          message: "Vercel API token is present. Portal access test successful (simulated).",
+          status: "success",
         },
-        { status: 401 },
+        { status: 200 },
+      )
+    } else {
+      return NextResponse.json(
+        {
+          message: "Vercel API token is not set. Cannot test portal access.",
+          status: "missing_token",
+        },
+        { status: 400 },
       )
     }
-
-    // Simulate portal access test
-    const testResult = {
-      portal,
-      path,
-      accessible: true,
-      userRole: session.user?.role || "tenant",
-      timestamp: new Date().toISOString(),
-      message: `Portal ${portal} is accessible for ${session.user?.role || "tenant"} role`,
-    }
-
-    // Add role-based access logic
-    if (path === "/dashboard" && session.user?.role !== "landlord") {
-      testResult.accessible = false
-      testResult.message = "Dashboard requires landlord role"
-    }
-
-    if (path === "/admin" && session.user?.email !== "admin@kejangu.com") {
-      testResult.accessible = false
-      testResult.message = "Admin panel requires admin privileges"
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: testResult,
-    })
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Portal test failed",
-        error: error.message,
-      },
-      { status: 500 },
-    )
+  } catch (error) {
+    console.error("Error testing portal access:", error)
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
